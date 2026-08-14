@@ -115,6 +115,21 @@ export default {
     try { inputs = validate(await request.json()); } catch (error) { return json(origin, { ok: false, error: error.message }, 400); }
     const requestId = crypto.randomUUID();
     inputs.request_id = requestId;
+    const total = Number(inputs.end) - Number(inputs.start) + 1;
+    const issueResponse = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues`, {
+      method: "POST",
+      headers: githubHeaders(env),
+      body: JSON.stringify({
+        title: `[Classcard status] ${requestId}`,
+        body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:running`,
+      }),
+    });
+    if (!issueResponse.ok) {
+      console.error(JSON.stringify({ event: "github_progress_issue_failed", status: issueResponse.status }));
+      return json(origin, { ok: false, error: "진행 기록을 만들지 못했습니다." }, 502);
+    }
+    const issue = await issueResponse.json();
+    inputs.issue_number = String(issue.number);
     const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/run.yml/dispatches`, {
       method: "POST",
       headers: githubHeaders(env),
@@ -124,6 +139,6 @@ export default {
       console.error(JSON.stringify({ event: "github_issue_failed", status: response.status }));
       return json(origin, { ok: false, error: "GitHub 실행을 시작하지 못했습니다." }, 502);
     }
-    return json(origin, { ok: true, id: requestId, message: "학습을 시작했습니다." }, 202);
+    return json(origin, { ok: true, id: requestId, issue: issue.number, message: "학습을 시작했습니다." }, 202);
   },
 };
