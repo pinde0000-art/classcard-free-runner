@@ -353,6 +353,25 @@ def scramble_choice_texts(driver):
     return texts
 
 
+def stable_scramble_choice_texts(driver, timeout=6):
+    # 조각들이 하나씩 순차적으로 나타나는 등장 애니메이션 중에 조회하면 아직
+    # 일부만 그려진 조각 목록을 잡을 수 있다(원문과 맞지 않는 조각 조합으로
+    # 이어짐). 연속 두 번의 조회 결과가 같을 때까지 기다려 안정된 목록만
+    # 반환한다.
+    end_time = time.time() + timeout
+    previous = None
+    while time.time() < end_time:
+        current = scramble_choice_texts(driver)
+        if current:
+            if previous is not None and sorted(current) == sorted(previous):
+                return current
+            previous = current
+        time.sleep(0.12)
+    if previous:
+        return previous
+    raise TimeoutException("문장 배열 조각 목록을 안정적으로 조회하지 못했습니다.")
+
+
 def active_scramble_placed_count(driver):
     # 클릭이 실제로 반영됐는지는 우리 쪽 카운터가 아니라, 사이트가 그린
     # .test-sentence-input 안에 실제로 놓인 조각 수(자식 엘리먼트 수)로
@@ -551,9 +570,7 @@ def solve_sentence_scramble(driver, answer):
                 f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
             )
 
-        choice_texts = WebDriverWait(driver, 6, poll_frequency=0.02).until(
-            lambda d: scramble_choice_texts(d) or None
-        )
+        choice_texts = stable_scramble_choice_texts(driver)
         choice_tokens = [
             normalize_sentence_token(text)
             for text in choice_texts
