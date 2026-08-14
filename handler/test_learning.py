@@ -299,6 +299,21 @@ def visible_scramble_choices(driver):
     )
 
 
+def visible_scramble_choice_texts(driver):
+    return driver.execute_script(
+        """
+        return [...document.querySelectorAll(
+          '#wrapper-test .test-sentence-words a:not(.clicked)'
+        )].filter(el => {
+          const r = el.getBoundingClientRect();
+          const s = getComputedStyle(el);
+          return r.width > 0 && r.height > 0 && s.display !== 'none'
+            && s.visibility !== 'hidden' && (el.innerText || '').trim();
+        }).map(el => (el.innerText || '').trim());
+        """
+    )
+
+
 def sentence_question(driver, records):
     text = norm_text(driver.execute_script("return document.body.innerText || '';"))
     matches = [
@@ -390,10 +405,9 @@ def solve_sentence_scramble(driver, answer):
 
     while expected_start < len(raw_tokens):
         dismiss_test_focus_warning(driver)
-        choices = WebDriverWait(driver, 6, poll_frequency=0.02).until(
-            lambda d: visible_scramble_choices(d) or None
+        choice_texts = WebDriverWait(driver, 6, poll_frequency=0.02).until(
+            lambda d: visible_scramble_choice_texts(d) or None
         )
-        choice_texts = [choice.text.strip() for choice in choices]
         choice_tokens = [normalize_sentence_token(text) for text in choice_texts]
 
         segment = None
@@ -415,15 +429,21 @@ def solve_sentence_scramble(driver, answer):
         used_ids = set()
         for expected_token in segment:
             expected = normalize_sentence_token(expected_token)
-            choice = next(
-                (
-                    element
-                    for element in visible_scramble_choices(driver)
-                    if element.id not in used_ids
-                    and normalize_sentence_token(element.text) == expected
-                ),
-                None,
-            )
+            choice = None
+            for _ in range(3):
+                try:
+                    choice = next(
+                        (
+                            element
+                            for element in visible_scramble_choices(driver)
+                            if element.id not in used_ids
+                            and normalize_sentence_token(element.text) == expected
+                        ),
+                        None,
+                    )
+                    break
+                except StaleElementReferenceException:
+                    time.sleep(0.03)
             if choice is None:
                 raise RuntimeError(f"문장 조각 {expected_token!r}을 찾지 못했습니다.")
             used_ids.add(choice.id)
