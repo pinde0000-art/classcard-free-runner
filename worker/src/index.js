@@ -90,11 +90,11 @@ export default {
       const knownIssue = Number(url.searchParams.get("issue"));
       let issue;
       if (Number.isInteger(knownIssue) && knownIssue > 0) {
-        const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues/${knownIssue}`, { headers: githubHeaders(env, false) });
+        const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues/${knownIssue}`, { headers: githubHeaders(env) });
         if (response.ok) issue = await response.json();
       } else {
         const query = encodeURIComponent(`repo:${OWNER}/${REPO} in:title "[Classcard status] ${requestId}"`);
-        const response = await fetch(`https://api.github.com/search/issues?q=${query}`, { headers: githubHeaders(env, false) });
+        const response = await fetch(`https://api.github.com/search/issues?q=${query}`, { headers: githubHeaders(env) });
         if (response.ok) {
           const result = await response.json();
           issue = (result.items || []).find((item) => item.title === `[Classcard status] ${requestId}`);
