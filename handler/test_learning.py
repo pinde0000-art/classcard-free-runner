@@ -496,39 +496,6 @@ def test_ready(driver):
     )
 
 
-def select_favorite_scope(driver):
-    return driver.execute_script(
-        r"""
-        const visible = el => {
-          const style = getComputedStyle(el), rect = el.getBoundingClientRect();
-          return style.display !== 'none' && style.visibility !== 'hidden'
-            && rect.width > 0 && rect.height > 0;
-        };
-        const direct = Array.from(document.querySelectorAll(
-          'input[value="4000"], [data-value="4000"], [data-section="4000"]'
-        )).find(visible);
-        if (direct) {
-          direct.click();
-          direct.dispatchEvent(new Event('change', {bubbles: true}));
-          return true;
-        }
-        const candidates = Array.from(document.querySelectorAll(
-          'label, button, a, [role="button"], li'
-        ));
-        const target = candidates.find(el => {
-          const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-          return visible(el) && text.includes('중요')
-            && (text.includes('카드') || text.includes('단어') || text.includes('문장'));
-        });
-        if (!target) return false;
-        const input = target.htmlFor ? document.getElementById(target.htmlFor) : null;
-        (input || target).click();
-        if (input) input.dispatchEvent(new Event('change', {bubbles: true}));
-        return true;
-        """
-    )
-
-
 def start_test(driver):
     end_time = time.time() + 35
     while time.time() < end_time:
@@ -536,7 +503,6 @@ def start_test(driver):
             raise NoSuchWindowException("테스트 시작 중 브라우저 창이 닫혔습니다.")
         if test_ready(driver):
             return
-        select_favorite_scope(driver)
         if click_visible(driver, START_SELECTORS, timeout=1):
             time.sleep(0.8)
         else:
@@ -560,11 +526,6 @@ class TestLearning:
             lambda d: "ClassTest" in d.current_url
             and bool(d.find_elements(By.ID, "wrapper-test"))
         )
-        settings_text = driver.execute_script(
-            "return (document.body.innerText || '').replace(/\\s+/g, ' ').trim();"
-        )
-        print(f"테스트 설정 화면: {settings_text[:1200]}", flush=True)
-        select_favorite_scope(driver)
         start_test(driver)
 
         completed = 0
