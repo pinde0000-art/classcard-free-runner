@@ -457,7 +457,11 @@ def solve_sentence_scramble(driver, answer):
         choice_texts = WebDriverWait(driver, 6, poll_frequency=0.02).until(
             lambda d: visible_scramble_choice_texts(d) or None
         )
-        choice_tokens = [normalize_sentence_token(text) for text in choice_texts]
+        choice_tokens = [
+            normalize_sentence_token(text)
+            for text in choice_texts
+            if normalize_sentence_token(text)
+        ]
 
         segment = None
         segment_end = expected_start
