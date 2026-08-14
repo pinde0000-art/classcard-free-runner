@@ -82,6 +82,28 @@ def set_favorites(driver, set_id, cards, selected_ids):
         card["favorite"] = card["card_id"] in selected_ids
 
 
+def ensure_test_favorites(driver, set_id, class_id, selected_ids):
+    selected_ids = {str(value) for value in selected_ids}
+    latest_cards = []
+    for _ in range(4):
+        time.sleep(0.35)
+        open_set(driver, set_id, class_id)
+        latest_cards = read_cards(driver)
+        current_ids = {
+            card["card_id"] for card in latest_cards if card["favorite"]
+        }
+        if current_ids == selected_ids:
+            return
+        set_favorites(driver, set_id, latest_cards, selected_ids)
+    current_ids = {
+        card["card_id"] for card in latest_cards if card["favorite"]
+    }
+    raise RuntimeError(
+        "테스트용 선택 카드가 서버에 정확히 반영되지 않았습니다: "
+        f"선택 {len(selected_ids)}개, 반영 {len(current_ids)}개"
+    )
+
+
 def click_visible_text(driver, words):
     script = """
     const words = arguments[0];
@@ -281,12 +303,18 @@ def run(payload):
         )
 
         for label, group in groups:
-            set_favorites(driver, set_id, cards, {card["card_id"] for card in group})
+            selected_ids = {card["card_id"] for card in group}
+            set_favorites(driver, set_id, cards, selected_ids)
             data = word_data(group)
             section = 6000 if len(group) == len(cards) else 4000
             for round_number in range(1, remaining_rounds + 1):
                 if mode_name == "테스트":
-                    open_set(driver, set_id, class_id)
+                    ensure_test_favorites(
+                        driver,
+                        set_id,
+                        class_id,
+                        selected_ids,
+                    )
                 else:
                     driver.get(f"https://www.classcard.net/{route}/{set_id}/{section}/{class_id}")
                     WebDriverWait(driver, 20).until(
