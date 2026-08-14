@@ -44,7 +44,7 @@ jobs:
       CLASSCARD_PASSWORD: ${{ secrets.CLASSCARD_PASSWORD }}
       CLASSCARD_NONINTERACTIVE: "1"
       CLASSCARD_HEADLESS: "1"
-      CLASSCARD_DATA_DIR: ${{ runner.temp }}/classcard
+      CLASSCARD_DATA_DIR: /tmp/classcard
       PYTHONUTF8: "1"
       PYTHONUNBUFFERED: "1"
     steps:
