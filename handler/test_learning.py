@@ -480,6 +480,7 @@ def solve_sentence_scramble(driver, answer):
             selected = False
             for _ in range(5):
                 before_choices = len(visible_scramble_choice_texts(driver))
+                before_selected = selected_sentence_token_count(driver)
                 try:
                     choice = WebDriverWait(driver, 1, poll_frequency=0.02).until(
                         lambda d: find_scramble_choice(d, expected)
@@ -488,48 +489,22 @@ def solve_sentence_scramble(driver, answer):
                     WebDriverWait(driver, 0.7, poll_frequency=0.02).until(
                         lambda d: len(visible_scramble_choice_texts(d))
                         < before_choices
+                        or selected_sentence_token_count(d) > before_selected
                     )
                     selected = True
                     break
                 except StaleElementReferenceException:
-                    if len(visible_scramble_choice_texts(driver)) < before_choices:
+                    if (
+                        len(visible_scramble_choice_texts(driver)) < before_choices
+                        or selected_sentence_token_count(driver) > before_selected
+                    ):
                         selected = True
                         break
                     time.sleep(0.08)
                 except TimeoutException:
                     time.sleep(0.12)
             if not selected:
-                state = driver.execute_script(
-                    """
-                    const expected = arguments[0];
-                    return {
-                      matches: [...document.querySelectorAll(
-                        '#wrapper-test .test-sentence-words a'
-                      )].filter(el => (el.innerText || '').trim().toLocaleLowerCase()
-                        === expected).map(el => {
-                          const r = el.getBoundingClientRect();
-                          const x = r.left + r.width / 2;
-                          const y = r.top + r.height / 2;
-                          const hit = document.elementFromPoint(x, y);
-                          return {
-                            html: el.outerHTML,
-                            rect: {x, y, width: r.width, height: r.height},
-                            hit: hit && hit.outerHTML,
-                            display: getComputedStyle(el).display,
-                            visibility: getComputedStyle(el).visibility
-                          };
-                        }),
-                      selected: [...document.querySelectorAll(
-                        '.test-sentence-input'
-                      )].map(el => ({text: (el.innerText || '').trim(), html: el.outerHTML})),
-                      body: (document.body.innerText || '').slice(-600)
-                    };
-                    """,
-                    expected,
-                )
-                raise RuntimeError(
-                    f"문장 조각 {expected_token!r}을 선택하지 못했습니다. 상태: {state}"
-                )
+                raise RuntimeError(f"문장 조각 {expected_token!r}을 선택하지 못했습니다.")
             time.sleep(0.03)
 
         previous_signature = tuple(choice_texts)
