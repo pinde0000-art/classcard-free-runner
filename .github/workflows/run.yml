@@ -63,7 +63,7 @@ jobs:
             const issue = await github.rest.issues.create({
               ...context.repo,
               title: `[Classcard status] ${{ inputs.request_id }}`,
-              body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:queued`
+              body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:running`
             });
             core.setOutput('number', issue.data.number);
       - uses: actions/checkout@v4
