@@ -1,0 +1,5 @@
+config.json
+*_cache.json
+*.log
+__pycache__/
+batch_debug/
