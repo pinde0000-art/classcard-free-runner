@@ -283,44 +283,51 @@ def exact_sentence_token(value):
     return re.sub(r"[^\w']", "", value, flags=re.UNICODE)
 
 
+
+# 여러 함수가 공유하는 조각: 현재 화면에 실제로 떠 있는 .test-sentence-words
+# 컨테이너 하나("활성 컨테이너")를 찾는다. 문제가 바뀐 직후에도 이전 문항의
+# 컨테이너가 DOM에 남아 있을 수 있으므로, 낱개 조각이 아니라 컨테이너 자체를
+# 히트테스트해서 고른다.
+_ACTIVE_SCRAMBLE_CONTAINER_JS = """
+const passesBasic = (el) => {
+  const r = el.getBoundingClientRect();
+  const s = getComputedStyle(el);
+  return r.width > 0 && r.height > 0
+    && s.display !== 'none' && s.visibility !== 'hidden'
+    && parseFloat(s.opacity || '1') > 0.05
+    && r.bottom > 0 && r.top < innerHeight
+    && r.right > 0 && r.left < innerWidth;
+};
+const containers = [...document.querySelectorAll(
+  '#wrapper-test .test-sentence-words'
+)];
+let active = null;
+for (const container of containers) {
+  if (!passesBasic(container)) continue;
+  const r = container.getBoundingClientRect();
+  const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+  const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+  const hit = document.elementFromPoint(x, y);
+  if (hit && (container === hit || container.contains(hit) || hit.contains(container))) {
+    active = container;
+    break;
+  }
+}
+if (!active) {
+  for (let index = containers.length - 1; index >= 0; index -= 1) {
+    if (passesBasic(containers[index])) {
+      active = containers[index];
+      break;
+    }
+  }
+}
+"""
+
+
 def scramble_choices(driver):
-    # 문제가 바뀐 직후에도 이전 문항의 .test-sentence-words 컨테이너가 DOM에 남아
-    # 있을 수 있으므로, 낱개 조각이 아니라 컨테이너 자체를 히트테스트해서 화면에
-    # 실제로 떠 있는 활성 컨테이너 하나만 고른 뒤 그 안에서만 조각을 찾는다.
     return driver.execute_script(
-        """
-        const passesBasic = (el) => {
-          const r = el.getBoundingClientRect();
-          const s = getComputedStyle(el);
-          return r.width > 0 && r.height > 0
-            && s.display !== 'none' && s.visibility !== 'hidden'
-            && parseFloat(s.opacity || '1') > 0.05
-            && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth;
-        };
-        const containers = [...document.querySelectorAll(
-          '#wrapper-test .test-sentence-words'
-        )];
-        let active = null;
-        for (const container of containers) {
-          if (!passesBasic(container)) continue;
-          const r = container.getBoundingClientRect();
-          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-          const hit = document.elementFromPoint(x, y);
-          if (hit && (container === hit || container.contains(hit) || hit.contains(container))) {
-            active = container;
-            break;
-          }
-        }
-        if (!active) {
-          for (let index = containers.length - 1; index >= 0; index -= 1) {
-            if (passesBasic(containers[index])) {
-              active = containers[index];
-              break;
-            }
-          }
-        }
+        _ACTIVE_SCRAMBLE_CONTAINER_JS
+        + """
         if (!active) return [];
         return [...active.querySelectorAll('a:not(.clicked)')].filter(el => {
           const r = el.getBoundingClientRect();
@@ -344,6 +351,25 @@ def scramble_choice_texts(driver):
         except StaleElementReferenceException:
             continue
     return texts
+
+
+def active_scramble_placed_count(driver):
+    # 클릭이 실제로 반영됐는지는 우리 쪽 카운터가 아니라, 사이트가 그린
+    # .test-sentence-input 안에 실제로 놓인 조각 수(자식 엘리먼트 수)로
+    # 판단한다. innerText는 조각 사이에 공백이 없어 단어 수를 셀 수 없다.
+    return driver.execute_script(
+        _ACTIVE_SCRAMBLE_CONTAINER_JS
+        + """
+        if (!active) return null;
+        let node = active;
+        for (let i = 0; i < 8 && node; i += 1) {
+          const input = node.querySelector('.test-sentence-input');
+          if (input) return input.children.length;
+          node = node.parentElement;
+        }
+        return null;
+        """
+    )
 
 
 def debug_scramble_state(driver):
@@ -462,13 +488,23 @@ def solve_sentence_scramble(driver, answer):
     if not raw_tokens:
         raise RuntimeError("문장 배열 정답이 비어 있습니다.")
     normalized = [normalize_sentence_token(token) for token in raw_tokens]
-    expected_start = 0
     # 첫 조회, 그리고 매 제출 직후에는 조각이 등장하는 애니메이션 중이라 클릭이
     # 무시될 수 있어 짧게 안정화 시간을 둔다.
     just_revealed = True
+    # 클릭이 실제로 반영됐는지는 우리 쪽 카운터가 아니라 .test-sentence-input에
+    # 실제로 놓인 조각 수(ground truth)로 판단한다. active_scramble_placed_count가
+    # 잠깐 None을 반환하는 경우(전환 중 등)를 대비해 마지막으로 확인한 값을 쓴다.
+    last_known_start = 0
 
-    while expected_start < len(raw_tokens):
+    while last_known_start < len(raw_tokens):
         dismiss_test_focus_warning(driver)
+        placed = active_scramble_placed_count(driver)
+        if placed is not None:
+            last_known_start = placed
+        expected_start = last_known_start
+        if expected_start >= len(raw_tokens):
+            break
+
         choice_texts = WebDriverWait(driver, 6, poll_frequency=0.02).until(
             lambda d: scramble_choice_texts(d) or None
         )
@@ -483,12 +519,10 @@ def solve_sentence_scramble(driver, answer):
         # 첫 클릭 후 현재 줄 분량만 남는 식). 그래서 구간을 한 번만 계산해 여러
         # 단어를 미리 계획해 클릭하지 않고, 매 클릭 전에 다시 계산한다.
         segment = None
-        segment_end = expected_start
         for start in range(expected_start, len(raw_tokens) - len(choice_tokens) + 1):
             end = start + len(choice_tokens)
             if Counter(normalized[start:end]) == Counter(choice_tokens):
                 segment = raw_tokens[start:end]
-                segment_end = end
                 break
         if segment is None:
             raise RuntimeError(
@@ -525,40 +559,37 @@ def solve_sentence_scramble(driver, answer):
         try:
             native_pointer_click(driver, found["choice"])
         except StaleElementReferenceException:
-            # 클릭 직전에 조각 DOM이 다시 그려졌다. used_ids 없이 매번 새로
-            # 조회하므로, 다음 바깥 루프 반복에서 같은 단어를 다시 찾으면 된다.
+            # 클릭 직전에 조각 DOM이 다시 그려졌다. 다음 바깥 루프 반복에서
+            # ground truth를 다시 읽어 같은 단어를 다시 찾으면 된다.
             continue
 
-        expected_start += 1
-        real_choice_count = len(choice_tokens)
         try:
             WebDriverWait(driver, 2, poll_frequency=0.02).until(
-                lambda d: sum(
-                    1 for text in scramble_choice_texts(d)
-                    if normalize_sentence_token(text)
-                ) < real_choice_count
+                lambda d: (active_scramble_placed_count(d) or 0) > expected_start
             )
         except TimeoutException:
-            pass  # 다음 반복의 새 조회가 실제 상태를 다시 확인해 준다.
-        else:
-            time.sleep(0.05)
+            pass  # 클릭이 반영되지 않았다면 다음 반복에서 같은 단어를 다시 찾는다.
 
-        if expected_start == segment_end:
-            submit = next(
-                (
-                    element
-                    for element in driver.find_elements(
-                        By.CSS_SELECTOR, ".btn-current-send-input"
-                    )
-                    if element.is_displayed() and element.is_enabled()
-                ),
-                None,
-            )
-            if submit is None:
-                raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
-            driver.execute_script("arguments[0].click();", submit)
-            just_revealed = True
-            if expected_start < len(raw_tokens):
+        # 이번에 보이던 실제 단어 조각을 모두 놓았으면(장식용 —만 남거나 아예
+        # 비었으면) 지금 줄을 제출한다. 두 번 연속 비어 있을 때만 제출해, DOM이
+        # 다시 그려지는 중에 잠깐 비어 보이는 경우를 걸러낸다.
+        if not [t for t in scramble_choice_texts(driver) if normalize_sentence_token(t)]:
+            time.sleep(0.15)
+            if not [t for t in scramble_choice_texts(driver) if normalize_sentence_token(t)]:
+                submit = next(
+                    (
+                        element
+                        for element in driver.find_elements(
+                            By.CSS_SELECTOR, ".btn-current-send-input"
+                        )
+                        if element.is_displayed() and element.is_enabled()
+                    ),
+                    None,
+                )
+                if submit is None:
+                    raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
+                driver.execute_script("arguments[0].click();", submit)
+                just_revealed = True
                 time.sleep(0.2)
 
 
