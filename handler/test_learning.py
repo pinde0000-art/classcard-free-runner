@@ -283,48 +283,58 @@ def exact_sentence_token(value):
     return re.sub(r"[^\w']", "", value, flags=re.UNICODE)
 
 
-def visible_scramble_choices(driver):
+def scramble_choices(driver):
+    # 문제가 바뀐 직후에도 이전 문항의 .test-sentence-words 컨테이너가 DOM에 남아
+    # 있을 수 있으므로, 낱개 조각이 아니라 컨테이너 자체를 히트테스트해서 화면에
+    # 실제로 떠 있는 활성 컨테이너 하나만 고른 뒤 그 안에서만 조각을 찾는다.
     return driver.execute_script(
         """
-        return [...document.querySelectorAll(
-            '#wrapper-test .test-sentence-words a:not(.clicked)'
-        )].filter(el => {
+        const passesBasic = (el) => {
           const r = el.getBoundingClientRect();
           const s = getComputedStyle(el);
+          return r.width > 0 && r.height > 0
+            && s.display !== 'none' && s.visibility !== 'hidden'
+            && parseFloat(s.opacity || '1') > 0.05
+            && r.bottom > 0 && r.top < innerHeight
+            && r.right > 0 && r.left < innerWidth;
+        };
+        const containers = [...document.querySelectorAll(
+          '#wrapper-test .test-sentence-words'
+        )];
+        let active = null;
+        for (const container of containers) {
+          if (!passesBasic(container)) continue;
+          const r = container.getBoundingClientRect();
           const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
           const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
           const hit = document.elementFromPoint(x, y);
+          if (hit && (container === hit || container.contains(hit) || hit.contains(container))) {
+            active = container;
+            break;
+          }
+        }
+        if (!active) {
+          for (let index = containers.length - 1; index >= 0; index -= 1) {
+            if (passesBasic(containers[index])) {
+              active = containers[index];
+              break;
+            }
+          }
+        }
+        if (!active) return [];
+        return [...active.querySelectorAll('a:not(.clicked)')].filter(el => {
+          const r = el.getBoundingClientRect();
+          const s = getComputedStyle(el);
           return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden'
-            && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth && hit
-            && (hit === el || el.contains(hit) || hit.contains(el))
+            && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.05
             && (el.innerText || '').trim();
         });
         """
     )
 
 
-def visible_scramble_choice_texts(driver):
-    return driver.execute_script(
-        """
-        return [...document.querySelectorAll(
-          '#wrapper-test .test-sentence-words a:not(.clicked)'
-        )].filter(el => {
-          const r = el.getBoundingClientRect();
-          const s = getComputedStyle(el);
-          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-          const hit = document.elementFromPoint(x, y);
-          return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden'
-            && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth && hit
-            && (hit === el || el.contains(hit) || hit.contains(el))
-            && (el.innerText || '').trim();
-        }).map(el => (el.innerText || '').trim());
-        """
-    )
+def scramble_choice_texts(driver):
+    return [norm_text(element.text) for element in scramble_choices(driver)]
 
 
 def sentence_question(driver, records):
@@ -348,52 +358,19 @@ def dismiss_test_focus_warning(driver):
     )
 
 
-def find_scramble_choice(driver, expected):
-    return driver.execute_script(
-        r"""
-        const expected = arguments[0];
-        return [...document.querySelectorAll(
-          '#wrapper-test .test-sentence-words a:not(.clicked)'
-        )].find(el => {
-          const r = el.getBoundingClientRect();
-          const s = getComputedStyle(el);
-          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-          const hit = document.elementFromPoint(x, y);
-          const token = (el.innerText || '').toLocaleLowerCase()
-            .replace(/\u2019/g, "'")
-            .replace(/[^\p{L}\p{N}_']/gu, '');
-          return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden'
-            && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth && hit
-            && (hit === el || el.contains(hit) || hit.contains(el))
-            && token === expected;
-        }) || null;
-        """,
-        expected,
-    )
-
-
-def visible_scramble_choice_count(driver):
-    return driver.execute_script(
-        """
-        return [...document.querySelectorAll(
-          '#wrapper-test .test-sentence-words a:not(.clicked)'
-        )].filter(el => {
-          const r = el.getBoundingClientRect();
-          const s = getComputedStyle(el);
-          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-          const hit = document.elementFromPoint(x, y);
-          return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden' && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth && hit
-            && (hit === el || el.contains(hit) || hit.contains(el))
-            && (el.innerText || '').trim();
-        }).length;
-        """
-    )
+def find_scramble_choice(driver, expected, used_ids):
+    # used_ids: already-clicked piece ids for this segment. Needed because a
+    # repeated word can appear twice in one segment, and re-searching before
+    # the site adds .clicked would re-click (and thus deselect) the same tile.
+    for element in scramble_choices(driver):
+        try:
+            if element.id in used_ids:
+                continue
+            if normalize_sentence_token(element.text) == expected:
+                return element
+        except StaleElementReferenceException:
+            continue
+    return None
 
 
 def selected_sentence_token_count(driver):
@@ -450,7 +427,7 @@ def solve_sentence_scramble(driver, answer):
     while expected_start < len(raw_tokens):
         dismiss_test_focus_warning(driver)
         choice_texts = WebDriverWait(driver, 6, poll_frequency=0.02).until(
-            lambda d: visible_scramble_choice_texts(d) or None
+            lambda d: scramble_choice_texts(d) or None
         )
         choice_tokens = [
             normalize_sentence_token(text)
@@ -474,11 +451,31 @@ def solve_sentence_scramble(driver, answer):
 
         # 등장 애니메이션 중에는 클릭이 무시되므로 짧게 안정화한 뒤 누른다.
         time.sleep(0.35)
+        # 같은 단어가 한 구간에 두 번 이상 나올 수 있어(예: "a plane ... a doctor"),
+        # 사이트가 .clicked 클래스를 붙이기 전에 같은 조각을 다시 찾아 재클릭해
+        # 선택이 취소되는 것을 막기 위해 이번 구간에서 클릭한 조각의 id를 기억한다.
+        used_ids = set()
         for expected_token in segment:
             expected = normalize_sentence_token(expected_token)
-            choice = WebDriverWait(driver, 3, poll_frequency=0.02).until(
-                lambda d: find_scramble_choice(d, expected)
-            )
+            found = {}
+
+            def locate(d, expected=expected, found=found):
+                match = find_scramble_choice(d, expected, used_ids)
+                if match is None:
+                    return False
+                found["choice"] = match
+                return True
+
+            try:
+                WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
+            except TimeoutException as error:
+                current_texts = scramble_choice_texts(driver)
+                raise RuntimeError(
+                    f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
+                    f"이번 구간: {segment}, 현재 선택지: {current_texts}"
+                ) from error
+            choice = found["choice"]
+            used_ids.add(choice.id)
             native_pointer_click(driver, choice)
             time.sleep(0.08)
 
@@ -500,10 +497,7 @@ def solve_sentence_scramble(driver, answer):
 
         if expected_start < len(raw_tokens):
             WebDriverWait(driver, 6, poll_frequency=0.03).until(
-                lambda d: tuple(
-                    element.text.strip()
-                    for element in visible_scramble_choices(d)
-                ) != previous_signature
+                lambda d: tuple(scramble_choice_texts(d)) != previous_signature
             )
 
 
@@ -566,7 +560,7 @@ def test_ready(driver):
         current_number(driver) is not None
         and (
             visible_question_box(driver)[0] is not None
-            or bool(visible_scramble_choices(driver))
+            or bool(scramble_choices(driver))
         )
     )
 
@@ -615,7 +609,7 @@ class TestLearning:
 
             number = current_number(driver)
             _, question = visible_question_box(driver)
-            is_sentence_scramble = bool(visible_scramble_choices(driver))
+            is_sentence_scramble = bool(scramble_choices(driver))
             if not question and is_sentence_scramble:
                 question = sentence_question(driver, records)
             if number is None or not question:
