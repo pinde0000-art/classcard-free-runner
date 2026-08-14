@@ -585,6 +585,12 @@ def solve_sentence_scramble(driver, answer):
 
         expected_token = segment[0]
         expected = normalize_sentence_token(expected_token)
+        print(
+            f"[scramble] pos={expected_start} line_start={line_start} "
+            f"attempts={word_attempts} target={expected_token!r} "
+            f"choices={choice_texts}",
+            flush=True,
+        )
         found = {}
 
         def locate(d, expected=expected, found=found):
@@ -770,6 +776,8 @@ class TestLearning:
         last_number = None
         same_number_since = None
         SAME_NUMBER_TIMEOUT = 20
+        no_question_since = None
+        NO_QUESTION_TIMEOUT = 20
         while not test_complete(driver):
             if not window_is_open(driver):
                 raise NoSuchWindowException("테스트 중 브라우저 창이 닫혔습니다.")
@@ -780,10 +788,26 @@ class TestLearning:
             if not question and is_sentence_scramble:
                 question = sentence_question(driver, records)
             if number is None or not question:
+                # test_ready()가 매번 즉시 True를 반환하면 이 분기가 아무런
+                # 대기 없이 계속 돌 수 있다(예: is_sentence_scramble 판정이
+                # 흔들려 question이 계속 빈 채로 남는 경우). 일정 시간 이상
+                # 문항 번호/질문을 못 읽으면 진단과 함께 실패시킨다.
+                if no_question_since is None:
+                    no_question_since = time.time()
+                elif time.time() - no_question_since > NO_QUESTION_TIMEOUT:
+                    state = norm_text(
+                        driver.execute_script("return document.body.innerText || '';")
+                    )
+                    raise RuntimeError(
+                        f"{NO_QUESTION_TIMEOUT}초 이상 문항 번호나 질문을 읽지 못했습니다. "
+                        f"number={number}, is_sentence_scramble={is_sentence_scramble}, "
+                        f"화면={state[:300]!r}"
+                    )
                 WebDriverWait(driver, 8).until(
                     lambda d: test_complete(d) or test_ready(d)
                 )
                 continue
+            no_question_since = None
             if number == last_number:
                 # wait_for_next_question()이 다음 문항으로의 전환을 잘못
                 # 감지했거나(예: current_number()가 잠깐 None이었다가 다시
