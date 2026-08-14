@@ -9,7 +9,7 @@ on:
       start: {description: "시작 카드", required: true, default: "1"}
       end: {description: "마지막 카드", required: true, default: "24"}
       card_count: {description: "전체 카드 수", required: true, default: "24"}
-      mode: {description: "1 암기, 2 리콜, 3 스펠", required: true, default: "1"}
+      mode: {description: "1 암기, 2 리콜, 3 스펠, 4 테스트", required: true, default: "1"}
       amount: {description: "1=100%, 2=200%, 3=300%, 4=400%", required: true, default: "1"}
       request_id: {description: "진행 상황 번호", required: false, default: ""}
       issue_number: {description: "진행 기록 번호", required: false, default: ""}
