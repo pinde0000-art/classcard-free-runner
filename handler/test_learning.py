@@ -559,6 +559,13 @@ def solve_sentence_scramble(driver, answer):
             for text in choice_texts
             if normalize_sentence_token(text)
         ]
+        if not choice_tokens:
+            # 장식용 '—'만 보이는 등, 실제 단어 조각이 하나도 없는 과도기
+            # 상태다. 이 상태로 Counter 매칭을 하면 길이 0인 구간이 항상
+            # "일치"해 버려 segment[0]에서 IndexError가 난다. 안정화를
+            # 기다렸다가 다시 조회한다.
+            time.sleep(0.15)
+            continue
 
         segment = None
         for start in range(expected_start, len(raw_tokens) - len(choice_tokens) + 1):
