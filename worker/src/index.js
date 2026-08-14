@@ -87,15 +87,24 @@ export default {
     if (request.method === "GET" && url.pathname === "/status") {
       const requestId = url.searchParams.get("id") || "";
       if (!/^[a-f0-9-]{36}$/.test(requestId)) return json(origin, { ok: false, error: "잘못된 실행 번호입니다." }, 400);
-      const query = encodeURIComponent(`repo:${OWNER}/${REPO} in:title "[Classcard status] ${requestId}"`);
-      const response = await fetch(`https://api.github.com/search/issues?q=${query}`, { headers: githubHeaders(env, false) });
-      if (!response.ok) return json(origin, { ok: true, progress: "0/0", state: "queued" });
-      const result = await response.json();
-      const issue = (result.items || []).find((item) => item.title === `[Classcard status] ${requestId}`);
+      const knownIssue = Number(url.searchParams.get("issue"));
+      let issue;
+      if (Number.isInteger(knownIssue) && knownIssue > 0) {
+        const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues/${knownIssue}`, { headers: githubHeaders(env, false) });
+        if (response.ok) issue = await response.json();
+      } else {
+        const query = encodeURIComponent(`repo:${OWNER}/${REPO} in:title "[Classcard status] ${requestId}"`);
+        const response = await fetch(`https://api.github.com/search/issues?q=${query}`, { headers: githubHeaders(env, false) });
+        if (response.ok) {
+          const result = await response.json();
+          issue = (result.items || []).find((item) => item.title === `[Classcard status] ${requestId}`);
+        }
+      }
       if (!issue) return json(origin, { ok: true, progress: "0/0", state: "queued" });
       const body = issue.body || "";
       return json(origin, {
         ok: true,
+        issue: issue.number,
         progress: marker(body, "CLASSCARD_PROGRESS") || "0/0",
         state: marker(body, "CLASSCARD_STATUS") || (issue.state === "closed" ? "completed" : "queued"),
       });
