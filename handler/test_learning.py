@@ -447,7 +447,37 @@ def solve_sentence_scramble(driver, answer):
             if choice is None:
                 raise RuntimeError(f"문장 조각 {expected_token!r}을 찾지 못했습니다.")
             used_ids.add(choice.id)
-            ActionChains(driver).move_to_element(choice).pause(0.03).click().perform()
+            point = driver.execute_script(
+                """
+                const r = arguments[0].getBoundingClientRect();
+                return {x: r.left + r.width / 2, y: r.top + r.height / 2};
+                """,
+                choice,
+            )
+            driver.execute_cdp_cmd(
+                "Input.dispatchMouseEvent",
+                {"type": "mouseMoved", "x": point["x"], "y": point["y"]},
+            )
+            driver.execute_cdp_cmd(
+                "Input.dispatchMouseEvent",
+                {
+                    "type": "mousePressed",
+                    "x": point["x"],
+                    "y": point["y"],
+                    "button": "left",
+                    "clickCount": 1,
+                },
+            )
+            driver.execute_cdp_cmd(
+                "Input.dispatchMouseEvent",
+                {
+                    "type": "mouseReleased",
+                    "x": point["x"],
+                    "y": point["y"],
+                    "button": "left",
+                    "clickCount": 1,
+                },
+            )
             time.sleep(0.05)
 
         previous_signature = tuple(choice_texts)
