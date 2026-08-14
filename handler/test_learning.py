@@ -394,6 +394,11 @@ def selected_sentence_token_count(driver):
 
 
 def native_pointer_click(driver, element):
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
+        element,
+    )
+    time.sleep(0.03)
     point = driver.execute_script(
         """
         const r = arguments[0].getBoundingClientRect();
