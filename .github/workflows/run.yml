@@ -61,8 +61,6 @@ jobs:
           cache: pip
       - name: 패키지 설치
         run: |
-          sudo apt-get update
-          sudo apt-get install -y fonts-noto-cjk
           pip install -r requirements.txt
       - name: 클래스카드 자동화
         env:
