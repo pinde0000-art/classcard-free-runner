@@ -390,9 +390,31 @@ def solve_sentence_scramble(driver, answer):
         for attempt in range(3):
             try:
                 dismiss_test_focus_warning(driver)
-                choice = WebDriverWait(driver, 5, poll_frequency=0.01).until(
-                    lambda d: find_scramble_choice(d, expected)
-                )
+                try:
+                    choice = WebDriverWait(driver, 5, poll_frequency=0.01).until(
+                        lambda d: find_scramble_choice(d, expected)
+                    )
+                except TimeoutException as error:
+                    state = driver.execute_script(
+                        """
+                        return {
+                          choices: [...document.querySelectorAll(
+                            '#wrapper-test .test-sentence-words a'
+                          )].map(el => ({
+                            text: (el.innerText || '').trim(),
+                            className: el.className,
+                            visible: !!(el.offsetWidth || el.offsetHeight)
+                          })),
+                          selected: [...document.querySelectorAll(
+                            '.test-sentence-input'
+                          )].map(el => (el.innerText || '').trim()),
+                          body: (document.body.innerText || '').slice(-700)
+                        };
+                        """
+                    )
+                    raise RuntimeError(
+                        f"문장 조각 {expected_token!r}을 찾지 못했습니다. 상태: {state}"
+                    ) from error
                 driver.execute_script(
                     "arguments[0].scrollIntoView({block: 'center'});",
                     choice,
