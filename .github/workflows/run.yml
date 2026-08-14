@@ -11,6 +11,7 @@ on:
       card_count: {description: "전체 카드 수", required: true, default: "24"}
       mode: {description: "1 암기, 2 리콜, 3 스펠", required: true, default: "1"}
       amount: {description: "1=100%, 2=200%, 3=300%, 4=400%", required: true, default: "1"}
+      request_id: {description: "진행 상황 번호", required: false, default: ""}
   issues:
     types: [opened]
 
@@ -45,6 +46,10 @@ jobs:
       CLASSCARD_NONINTERACTIVE: "1"
       CLASSCARD_HEADLESS: "1"
       CLASSCARD_DATA_DIR: /tmp/classcard
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      GH_PROGRESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPOSITORY: ${{ github.repository }}
+      INPUT_REQUEST_ID: ${{ inputs.request_id }}
       PYTHONUTF8: "1"
       PYTHONUNBUFFERED: "1"
     steps:
