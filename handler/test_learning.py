@@ -560,6 +560,10 @@ class TestLearning:
             lambda d: "ClassTest" in d.current_url
             and bool(d.find_elements(By.ID, "wrapper-test"))
         )
+        settings_text = driver.execute_script(
+            "return (document.body.innerText || '').replace(/\\s+/g, ' ').trim();"
+        )
+        print(f"테스트 설정 화면: {settings_text[:1200]}", flush=True)
         select_favorite_scope(driver)
         start_test(driver)
 
