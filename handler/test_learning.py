@@ -334,7 +334,16 @@ def scramble_choices(driver):
 
 
 def scramble_choice_texts(driver):
-    return [norm_text(element.text) for element in scramble_choices(driver)]
+    # 사이트가 조각 DOM을 매우 빠르게 다시 그려서, execute_script가 반환한 직후
+    # Python에서 .text를 읽는 사이에 이미 stale이 되는 경우가 있다. 이런 조각은
+    # 건너뛰고, WebDriverWait가 다음 폴링에서 새로 조회하도록 예외를 삼킨다.
+    texts = []
+    for element in scramble_choices(driver):
+        try:
+            texts.append(norm_text(element.text))
+        except StaleElementReferenceException:
+            continue
+    return texts
 
 
 def debug_scramble_state(driver):
@@ -493,28 +502,44 @@ def solve_sentence_scramble(driver, answer):
         used_ids = set()
         for expected_token in segment:
             expected = normalize_sentence_token(expected_token)
-            found = {}
+            clicked = False
+            stale_error = None
+            # 사이트가 조각 DOM을 매우 빠르게 다시 그리기 때문에, 찾아낸 조각을
+            # 클릭하는 순간 이미 stale이 되어 있을 수 있다. 이때는 used_ids에
+            # 기록하지 않고(= 아직 클릭되지 않은 것으로 보고) 다시 찾는다.
+            for _ in range(5):
+                found = {}
 
-            def locate(d, expected=expected, found=found):
-                match = find_scramble_choice(d, expected, used_ids)
-                if match is None:
-                    return False
-                found["choice"] = match
-                return True
+                def locate(d, expected=expected, found=found):
+                    match = find_scramble_choice(d, expected, used_ids)
+                    if match is None:
+                        return False
+                    found["choice"] = match
+                    return True
 
-            try:
-                WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
-            except TimeoutException as error:
-                current_texts = scramble_choice_texts(driver)
-                debug_state = debug_scramble_state(driver)
+                try:
+                    WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
+                except TimeoutException as error:
+                    current_texts = scramble_choice_texts(driver)
+                    debug_state = debug_scramble_state(driver)
+                    raise RuntimeError(
+                        f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
+                        f"이번 구간: {segment}, 현재 선택지: {current_texts}, "
+                        f"디버그: {debug_state}"
+                    ) from error
+                choice = found["choice"]
+                try:
+                    native_pointer_click(driver, choice)
+                except StaleElementReferenceException as error:
+                    stale_error = error
+                    continue
+                used_ids.add(choice.id)
+                clicked = True
+                break
+            if not clicked:
                 raise RuntimeError(
-                    f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
-                    f"이번 구간: {segment}, 현재 선택지: {current_texts}, "
-                    f"디버그: {debug_state}"
-                ) from error
-            choice = found["choice"]
-            used_ids.add(choice.id)
-            native_pointer_click(driver, choice)
+                    f"문장 조각 {expected_token!r} 클릭이 계속 stale 상태로 실패했습니다."
+                ) from stale_error
             time.sleep(0.08)
 
         previous_signature = tuple(choice_texts)
