@@ -4,23 +4,27 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 
-from batch_learning import login, open_set, read_learning_progress
+from batch_learning import create_login_session, login, open_set, read_learning_progress
 from classcard_catalog import make_driver, read_cards
 from handler.recall_learning import RecallLearning
 from handler.rote_learning import RoteLearning
 from handler.spelling_learning import SpellingLearning
+from handler.test_learning import TestLearning
+from utility import get_account
 
 
 MODES = {
     1: ("암기", "Memorize", RoteLearning),
     2: ("리콜", "Recall", RecallLearning),
     3: ("스펠", "Spell", SpellingLearning),
+    4: ("테스트", "Test", TestLearning),
 }
 
 
@@ -208,7 +212,7 @@ def validate(payload):
     if start < 1 or end < 1:
         raise ValueError("카드 시작과 끝 번호는 1 이상이어야 합니다.")
     if mode not in MODES:
-        raise ValueError("암기, 리콜, 스펠 중 하나를 선택해 주세요.")
+        raise ValueError("암기, 리콜, 스펠, 테스트 중 하나를 선택해 주세요.")
     if amount not in (1, 2, 3, 4):
         raise ValueError("100%, 200%, 300%, 400% 중 하나를 선택해 주세요.")
     return class_id, set_id, min(start, end), max(start, end), mode, amount
@@ -218,14 +222,20 @@ def run(payload):
     class_id, set_id, start, end, mode, amount = validate(payload)
     title = str(payload.get("title") or f"세트 {set_id}")
     mode_name, route, handler_class = MODES[mode]
-    driver = make_driver()
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        login_future = executor.submit(create_login_session, get_account())
+        driver = make_driver()
+        try:
+            authenticated_session = login_future.result(timeout=20)
+        except Exception:
+            authenticated_session = None
     cards = []
     originals = set()
     try:
-        login(driver)
+        login(driver, authenticated_session)
         open_set(driver, set_id, class_id)
         progress = read_learning_progress(driver)
-        current_progress = int(progress.get(mode_name, 0) or 0)
+        current_progress = 0 if mode_name == "테스트" else int(progress.get(mode_name, 0) or 0)
         target_progress = amount * 100
         remaining_rounds = max(
             0,
@@ -275,11 +285,14 @@ def run(payload):
             data = word_data(group)
             section = 6000 if len(group) == len(cards) else 4000
             for round_number in range(1, remaining_rounds + 1):
-                driver.get(f"https://www.classcard.net/{route}/{set_id}/{section}/{class_id}")
-                WebDriverWait(driver, 20).until(
-                    lambda d: d.find_elements(By.ID, "wrapper-learn")
-                    or d.find_elements(By.CSS_SELECTOR, ".CardItem")
-                )
+                if mode_name == "테스트":
+                    open_set(driver, set_id, class_id)
+                else:
+                    driver.get(f"https://www.classcard.net/{route}/{set_id}/{section}/{class_id}")
+                    WebDriverWait(driver, 20).until(
+                        lambda d: d.find_elements(By.ID, "wrapper-learn")
+                        or d.find_elements(By.CSS_SELECTOR, ".CardItem")
+                    )
                 if label == "문장" and section == 4000:
                     body = driver.execute_script("return document.body.innerText || '';")
                     if re.search(r"\b0\s*/\s*0\b", body):
@@ -291,7 +304,7 @@ def run(payload):
                     target_progress,
                     current_progress + round_number * 100,
                 )
-                already_completed = prepare_round(driver, round_target)
+                already_completed = mode_name != "테스트" and prepare_round(driver, round_target)
                 print(
                     f"{label} {mode_name} {round_number}/{remaining_rounds}회 시작 ({len(group)}개)",
                     flush=True,
