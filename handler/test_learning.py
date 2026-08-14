@@ -412,6 +412,29 @@ def solve_sentence_scramble(driver, answer):
 
         # 등장 애니메이션 중에는 클릭이 무시되므로 짧게 안정화한 뒤 누른다.
         time.sleep(0.35)
+        if expected_start == 0:
+            print(
+                "문장 테스트 선택 구조:",
+                driver.execute_script(
+                    """
+                    const el = [...document.querySelectorAll(
+                      '#wrapper-test .test-sentence-words a'
+                    )].find(node => node.offsetWidth || node.offsetHeight);
+                    if (!el) return null;
+                    const r = el.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                      r.left + r.width / 2, r.top + r.height / 2
+                    );
+                    return {
+                      element: el.outerHTML,
+                      parent: el.parentElement && el.parentElement.outerHTML,
+                      hit: hit && hit.outerHTML,
+                      pointerEvents: getComputedStyle(el).pointerEvents,
+                      disabled: el.disabled
+                    };
+                    """
+                ),
+            )
         used_ids = set()
         for expected_token in segment:
             expected = normalize_sentence_token(expected_token)
