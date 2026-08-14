@@ -53,6 +53,19 @@ jobs:
       PYTHONUTF8: "1"
       PYTHONUNBUFFERED: "1"
     steps:
+      - name: 진행 상황 준비
+        id: progress_issue
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const total = Number('${{ inputs.end }}') - Number('${{ inputs.start }}') + 1;
+            const issue = await github.rest.issues.create({
+              ...context.repo,
+              title: `[Classcard status] ${{ inputs.request_id }}`,
+              body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:queued`
+            });
+            core.setOutput('number', issue.data.number);
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -64,6 +77,8 @@ jobs:
           sudo apt-get install -y fonts-noto-cjk
           pip install -r requirements.txt
       - name: 클래스카드 자동화
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number || steps.progress_issue.outputs.number }}
         run: python -u action_payload.py
       - name: 결과 남기기
         if: always() && github.event_name == 'issues'
