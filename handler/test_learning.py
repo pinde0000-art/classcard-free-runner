@@ -451,29 +451,32 @@ def solve_sentence_scramble(driver, answer):
 
         # 등장 애니메이션 중에는 클릭이 무시되므로 짧게 안정화한 뒤 누른다.
         time.sleep(0.35)
-        used_ids = set()
         for expected_token in segment:
             expected = normalize_sentence_token(expected_token)
-            choice = None
-            for _ in range(3):
+            selected = False
+            for _ in range(5):
+                before_choices = len(visible_scramble_choice_texts(driver))
                 try:
-                    choice = next(
-                        (
-                            element
-                            for element in visible_scramble_choices(driver)
-                            if element.id not in used_ids
-                            and normalize_sentence_token(element.text) == expected
-                        ),
-                        None,
+                    choice = WebDriverWait(driver, 1, poll_frequency=0.02).until(
+                        lambda d: find_scramble_choice(d, expected)
                     )
+                    native_pointer_click(driver, choice)
+                    WebDriverWait(driver, 0.7, poll_frequency=0.02).until(
+                        lambda d: len(visible_scramble_choice_texts(d))
+                        < before_choices
+                    )
+                    selected = True
                     break
                 except StaleElementReferenceException:
-                    time.sleep(0.03)
-            if choice is None:
-                raise RuntimeError(f"문장 조각 {expected_token!r}을 찾지 못했습니다.")
-            used_ids.add(choice.id)
-            native_pointer_click(driver, choice)
-            time.sleep(0.05)
+                    if len(visible_scramble_choice_texts(driver)) < before_choices:
+                        selected = True
+                        break
+                    time.sleep(0.08)
+                except TimeoutException:
+                    time.sleep(0.12)
+            if not selected:
+                raise RuntimeError(f"문장 조각 {expected_token!r}을 선택하지 못했습니다.")
+            time.sleep(0.03)
 
         previous_signature = tuple(choice_texts)
         submit = next(
