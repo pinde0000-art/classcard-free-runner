@@ -399,14 +399,9 @@ def visible_scramble_choice_count(driver):
 def selected_sentence_token_count(driver):
     text = driver.execute_script(
         """
-        const el = [...document.querySelectorAll('.test-sentence-input')]
-          .find(node => {
-            const r = node.getBoundingClientRect();
-            const style = getComputedStyle(node);
-            return r.width > 0 && r.height > 0 && style.display !== 'none'
-              && style.visibility !== 'hidden';
-          });
-        return el ? (el.innerText || '') : '';
+        return [...document.querySelectorAll('.test-sentence-input')]
+          .map(el => el.innerText || '')
+          .join(' ');
         """
     )
     return len(norm_text(text).split())
