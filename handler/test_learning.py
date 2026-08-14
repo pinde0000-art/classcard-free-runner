@@ -507,45 +507,33 @@ def solve_sentence_scramble(driver, answer):
     if not raw_tokens:
         raise RuntimeError("문장 배열 정답이 비어 있습니다.")
     normalized = [normalize_sentence_token(token) for token in raw_tokens]
-    # 첫 조회, 그리고 매 제출 직후에는 조각이 등장하는 애니메이션 중이라 클릭이
-    # 무시될 수 있어 짧게 안정화 시간을 둔다.
-    just_revealed = True
-    # 클릭이 실제로 반영됐는지는 우리 쪽 카운터가 아니라 .test-sentence-input에
-    # 실제로 놓인 조각 수(ground truth)로 판단한다. active_scramble_placed_count가
-    # 잠깐 None을 반환하는 경우(전환 중 등)를 대비해 마지막으로 확인한 값을 쓴다.
-    last_known_start = 0
-    # 클릭이 예외 없이 "성공"해도 실제로는 반영되지 않는 경우(좌표가 빗나가는
-    # 등)가 있어, 같은 위치에서 계속 제자리걸음이면 무한 루프 대신 진단 정보와
-    # 함께 즉시 실패시킨다.
-    stall_position = -1
-    stall_attempts = 0
-    STALL_LIMIT = 12
 
-    while last_known_start < len(raw_tokens):
+    # 줄 단위 상태 머신. line_start는 지금 줄이 시작될 때(문제 시작 시, 또는
+    # 이전 줄 제출 직후) 이미 놓여 있던 단어 수다. 다음 줄에 속한 조각은
+    # 화면/DOM에 미리 보여도(예: 'York'을 놓기 전부터 'and'가 목록에 있음)
+    # 지금 줄을 제출하기 전에는 실제로 클릭이 먹지 않는다. 그래서 "조각이
+    # 비었는지"가 아니라 "같은 단어를 여러 번 눌러도 진행되지 않는지"로 줄이
+    # 끝났음을 판단한다.
+    line_start = active_scramble_placed_count(driver) or 0
+    just_revealed = True
+
+    WORD_RETRY_LIMIT = 3   # 이만큼 실패하면 지금 줄이 끝났을 가능성을 의심한다
+    STALL_LIMIT = 12       # 그래도 안 되면 무한 루프 대신 진단과 함께 실패
+    word_attempts = 0
+    tracked_position = -1
+    # 같은 위치에서 제출을 두 번 이상 시도하지 않기 위한 표시(성급한 제출 방지).
+    line_submit_tried_at = -1
+
+    while True:
         dismiss_test_focus_warning(driver)
         placed = active_scramble_placed_count(driver)
-        if placed is not None:
-            last_known_start = placed
-        expected_start = last_known_start
+        expected_start = placed if placed is not None else tracked_position
+        if expected_start < 0:
+            expected_start = 0
         if expected_start >= len(raw_tokens):
-            break
-
-        if expected_start == stall_position:
-            stall_attempts += 1
-        else:
-            stall_position = expected_start
-            stall_attempts = 0
-        if stall_attempts >= STALL_LIMIT:
-            debug_state = debug_scramble_state(driver)
-            raise RuntimeError(
-                f"문장 배열 {expected_start}번째 단어({raw_tokens[expected_start]!r})에서 "
-                f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
-            )
-        if stall_attempts == 4:
-            # 같은 단어를 여러 번 눌러도 반영되지 않는 경우, 사실 지금 줄은
-            # 이미 완성됐는데 다음 줄 조각이 미리 보이느라(아직 클릭은 안
-            # 먹음) 조각 목록이 비어 보이지 않아 제출 타이밍을 놓쳤을 수
-            # 있다. 제출 버튼이 눌릴 수 있는 상태면 한 번 시도해 본다.
+            # 마지막 줄도 다른 줄과 마찬가지로 명시적인 제출이 필요하다.
+            # 여기서 조각 배치가 끝났다고 바로 return하면 마지막 줄이 제출되지
+            # 않은 채 남을 수 있다.
             submit = next(
                 (
                     element
@@ -558,9 +546,12 @@ def solve_sentence_scramble(driver, answer):
             )
             if submit is not None:
                 driver.execute_script("arguments[0].click();", submit)
-                just_revealed = True
-                time.sleep(0.3)
-                continue
+                time.sleep(0.2)
+            return
+        if expected_start != tracked_position:
+            tracked_position = expected_start
+            word_attempts = 0
+        line_start = min(line_start, expected_start)
 
         choice_texts = stable_scramble_choice_texts(driver)
         choice_tokens = [
@@ -569,10 +560,6 @@ def solve_sentence_scramble(driver, answer):
             if normalize_sentence_token(text)
         ]
 
-        # 첫 조각을 클릭한 뒤에야 사이트가 현재 줄의 실제 길이를 확정하고 다음
-        # 줄의 조각을 DOM에서 지우는 경우가 있다(처음엔 두 줄 분량이 함께 보이다
-        # 첫 클릭 후 현재 줄 분량만 남는 식). 그래서 구간을 한 번만 계산해 여러
-        # 단어를 미리 계획해 클릭하지 않고, 매 클릭 전에 다시 계산한다.
         segment = None
         for start in range(expected_start, len(raw_tokens) - len(choice_tokens) + 1):
             end = start + len(choice_tokens)
@@ -603,57 +590,73 @@ def solve_sentence_scramble(driver, answer):
         try:
             WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
         except TimeoutException as error:
-            current_texts = scramble_choice_texts(driver)
             debug_state = debug_scramble_state(driver)
             raise RuntimeError(
                 f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
-                f"남은 원문: {raw_tokens[expected_start:]}, 현재 선택지: {current_texts}, "
+                f"남은 원문: {raw_tokens[expected_start:]}, 현재 선택지: {choice_texts}, "
                 f"디버그: {debug_state}"
             ) from error
 
         try:
             native_pointer_click(driver, found["choice"])
         except StaleElementReferenceException:
-            # 클릭 직전에 조각 DOM이 다시 그려졌다. 다음 바깥 루프 반복에서
-            # ground truth를 다시 읽어 같은 단어를 다시 찾으면 된다.
+            # 클릭 직전에 조각 DOM이 다시 그려졌다. word_attempts를 늘리지
+            # 않고 다음 바깥 루프 반복에서 ground truth를 다시 읽는다.
             continue
 
         try:
-            WebDriverWait(driver, 2, poll_frequency=0.02).until(
+            WebDriverWait(driver, 1.5, poll_frequency=0.02).until(
                 lambda d: (active_scramble_placed_count(d) or 0) > expected_start
             )
+            # 클릭이 실제로 반영됐다 - 다음 단어로 진행한다.
+            word_attempts = 0
+            time.sleep(0.08)
+            continue
         except TimeoutException:
-            pass  # 클릭이 반영되지 않았다면 다음 반복에서 같은 단어를 다시 찾는다.
-        # placed count는 매우 빨리 갱신될 수 있어(수십 ms), 이 확인이 끝나자마자
-        # 다음 조각을 찾으면 사이트가 남은 조각들을 재배치하는 애니메이션이
-        # 끝나기 전에 클릭하게 될 수 있다. 원래 코드가 매 클릭 뒤에 두던 짧은
-        # 여유 시간을 그대로 둔다.
-        time.sleep(0.08)
+            pass
 
-        # .btn-current-send-input는 단어 하나만 놓아도 활성화돼 있어("A"만
-        # 놓은 상태에서 눌러도 사라지지 않고 이후 클릭이 전혀 먹지 않게 됨,
-        # 31812103010 등에서 확인) 줄 완료 신호로 쓸 수 없다. 대신 이번에
-        # 보이던 실제 단어 조각을 모두 놓았으면(장식용 —만 남거나 아예
-        # 비었으면) 지금 줄을 제출한다. 두 번 연속 비어 있을 때만 제출해,
-        # DOM이 다시 그려지는 중에 잠깐 비어 보이는 경우를 걸러낸다.
-        if not [t for t in scramble_choice_texts(driver) if normalize_sentence_token(t)]:
-            time.sleep(0.15)
-            if not [t for t in scramble_choice_texts(driver) if normalize_sentence_token(t)]:
-                submit = next(
-                    (
-                        element
-                        for element in driver.find_elements(
-                            By.CSS_SELECTOR, ".btn-current-send-input"
-                        )
-                        if element.is_displayed() and element.is_enabled()
-                    ),
-                    None,
-                )
-                if submit is None:
-                    raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
+        # 이번 클릭은 반영되지 않았다.
+        word_attempts += 1
+        if word_attempts >= STALL_LIMIT:
+            debug_state = debug_scramble_state(driver)
+            raise RuntimeError(
+                f"문장 배열 {expected_start}번째 단어({expected_token!r})에서 "
+                f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
+            )
+
+        # 단어 하나도 놓지 못한 상태(expected_start == line_start)에서는
+        # 성급하게 제출하지 않고 그냥 재시도한다 - 이전에 제출 버튼이
+        # "A" 한 단어만 놓인 상태에서도 활성화돼 있어, 여기서 제출을 시도하면
+        # 그 뒤로 클릭이 전혀 먹지 않게 되는 문제가 있었다(31812103010).
+        if (
+            word_attempts >= WORD_RETRY_LIMIT
+            and expected_start > line_start
+            and line_submit_tried_at != expected_start
+        ):
+            line_submit_tried_at = expected_start
+            previous_signature = tuple(sorted(choice_texts))
+            submit = next(
+                (
+                    element
+                    for element in driver.find_elements(
+                        By.CSS_SELECTOR, ".btn-current-send-input"
+                    )
+                    if element.is_displayed() and element.is_enabled()
+                ),
+                None,
+            )
+            if submit is not None:
                 driver.execute_script("arguments[0].click();", submit)
+                try:
+                    WebDriverWait(driver, 4, poll_frequency=0.05).until(
+                        lambda d: tuple(sorted(scramble_choice_texts(d))) != previous_signature
+                    )
+                except TimeoutException:
+                    pass  # 신호가 안 바뀌어도 다음 반복에서 ground truth로 재확인한다.
+                line_start = active_scramble_placed_count(driver) or line_start
                 just_revealed = True
-                time.sleep(0.2)
+                word_attempts = 0
+                time.sleep(0.15)
 
 
 def wait_for_next_question(driver, number):
