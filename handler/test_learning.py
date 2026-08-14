@@ -495,6 +495,12 @@ def solve_sentence_scramble(driver, answer):
     # 실제로 놓인 조각 수(ground truth)로 판단한다. active_scramble_placed_count가
     # 잠깐 None을 반환하는 경우(전환 중 등)를 대비해 마지막으로 확인한 값을 쓴다.
     last_known_start = 0
+    # 클릭이 예외 없이 "성공"해도 실제로는 반영되지 않는 경우(좌표가 빗나가는
+    # 등)가 있어, 같은 위치에서 계속 제자리걸음이면 무한 루프 대신 진단 정보와
+    # 함께 즉시 실패시킨다.
+    stall_position = -1
+    stall_attempts = 0
+    STALL_LIMIT = 12
 
     while last_known_start < len(raw_tokens):
         dismiss_test_focus_warning(driver)
@@ -504,6 +510,18 @@ def solve_sentence_scramble(driver, answer):
         expected_start = last_known_start
         if expected_start >= len(raw_tokens):
             break
+
+        if expected_start == stall_position:
+            stall_attempts += 1
+        else:
+            stall_position = expected_start
+            stall_attempts = 0
+        if stall_attempts >= STALL_LIMIT:
+            debug_state = debug_scramble_state(driver)
+            raise RuntimeError(
+                f"문장 배열 {expected_start}번째 단어({raw_tokens[expected_start]!r})에서 "
+                f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
+            )
 
         choice_texts = WebDriverWait(driver, 6, poll_frequency=0.02).until(
             lambda d: scramble_choice_texts(d) or None
