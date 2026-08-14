@@ -291,8 +291,14 @@ def visible_scramble_choices(driver):
         )].filter(el => {
           const r = el.getBoundingClientRect();
           const s = getComputedStyle(el);
+          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+          const hit = document.elementFromPoint(x, y);
           return r.width > 0 && r.height > 0 && s.display !== 'none'
             && s.visibility !== 'hidden'
+            && r.bottom > 0 && r.top < innerHeight
+            && r.right > 0 && r.left < innerWidth && hit
+            && (hit === el || el.contains(hit) || hit.contains(el))
             && (el.innerText || '').trim();
         });
         """
@@ -307,8 +313,15 @@ def visible_scramble_choice_texts(driver):
         )].filter(el => {
           const r = el.getBoundingClientRect();
           const s = getComputedStyle(el);
+          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+          const hit = document.elementFromPoint(x, y);
           return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden' && (el.innerText || '').trim();
+            && s.visibility !== 'hidden'
+            && r.bottom > 0 && r.top < innerHeight
+            && r.right > 0 && r.left < innerWidth && hit
+            && (hit === el || el.contains(hit) || hit.contains(el))
+            && (el.innerText || '').trim();
         }).map(el => (el.innerText || '').trim());
         """
     )
@@ -344,11 +357,17 @@ def find_scramble_choice(driver, expected):
         )].find(el => {
           const r = el.getBoundingClientRect();
           const s = getComputedStyle(el);
+          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+          const hit = document.elementFromPoint(x, y);
           const token = (el.innerText || '').toLocaleLowerCase()
             .replace(/\u2019/g, "'")
             .replace(/[^\p{L}\p{N}_']/gu, '');
           return r.width > 0 && r.height > 0 && s.display !== 'none'
             && s.visibility !== 'hidden'
+            && r.bottom > 0 && r.top < innerHeight
+            && r.right > 0 && r.left < innerWidth && hit
+            && (hit === el || el.contains(hit) || hit.contains(el))
             && token === expected;
         }) || null;
         """,
