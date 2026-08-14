@@ -89,7 +89,9 @@ def login(driver):
             timeout=20,
         )
         if response.json().get("result") == "ok":
-            driver.get("https://www.classcard.net/")
+            # Visit a tiny same-origin resource only to unlock cookie injection.
+            # The next navigation goes straight to the selected set.
+            driver.get("https://www.classcard.net/favicon.ico")
             for cookie in session.cookies:
                 driver.add_cookie(
                     {
@@ -140,7 +142,7 @@ def open_set(driver, set_id, class_id):
     WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "div.flip-body"))
     )
-    time.sleep(0.7)
+    time.sleep(0.15)
     try:
         dropdown = driver.find_element(
             By.CSS_SELECTOR,
@@ -153,7 +155,7 @@ def open_set(driver, set_id, class_id):
             )
         )
         driver.execute_script("arguments[0].click();", first_option)
-        time.sleep(0.4)
+        time.sleep(0.1)
     except Exception:
         pass
     return url
