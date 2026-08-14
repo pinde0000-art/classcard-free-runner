@@ -6,7 +6,7 @@ function corsHeaders(origin) {
   return {
     "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? origin : ALLOWED_ORIGIN,
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     "Content-Type": "application/json; charset=utf-8",
     "Vary": "Origin",
@@ -14,10 +14,18 @@ function corsHeaders(origin) {
 }
 
 function json(origin, body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: corsHeaders(origin),
-  });
+  return new Response(JSON.stringify(body), { status, headers: corsHeaders(origin) });
+}
+
+function githubHeaders(env, authenticate = true) {
+  const headers = {
+    "Accept": "application/vnd.github+json",
+    "Content-Type": "application/json",
+    "User-Agent": "classcard-free-runner",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  if (authenticate) headers.Authorization = `Bearer ${env.GITHUB_TOKEN}`;
+  return headers;
 }
 
 async function secureEqual(left, right) {
@@ -46,72 +54,67 @@ function validate(payload) {
     mode: Number(payload.mode),
     amount: Number(payload.amount),
   };
-  if (!/^\d+$/.test(result.class_id) || !/^\d+$/.test(result.set_id)) {
-    throw new Error("클래스 또는 세트 번호가 올바르지 않습니다.");
-  }
-  if (!Number.isInteger(result.start) || !Number.isInteger(result.end)
-      || result.start < 1 || result.end < result.start || result.end > 1000) {
-    throw new Error("카드 범위가 올바르지 않습니다.");
-  }
-  if (!Number.isInteger(result.card_count) || result.card_count < result.end
-      || result.card_count > 1000) {
-    throw new Error("전체 카드 수가 올바르지 않습니다.");
-  }
-  if (![1, 2, 3].includes(result.mode) || ![1, 2, 3, 4].includes(result.amount)) {
-    throw new Error("학습 종류 또는 목표가 올바르지 않습니다.");
-  }
-  return Object.fromEntries(
-    Object.entries(result).map(([key, value]) => [key, String(value)]),
-  );
+  if (!/^\d+$/.test(result.class_id) || !/^\d+$/.test(result.set_id)) throw new Error("클래스 또는 세트 번호가 올바르지 않습니다.");
+  if (!Number.isInteger(result.start) || !Number.isInteger(result.end) || result.start < 1 || result.end < result.start || result.end > 1000) throw new Error("카드 범위가 올바르지 않습니다.");
+  if (!Number.isInteger(result.card_count) || result.card_count < result.end || result.card_count > 1000) throw new Error("전체 카드 수가 올바르지 않습니다.");
+  if (![1, 2, 3].includes(result.mode) || ![1, 2, 3, 4].includes(result.amount)) throw new Error("학습 종류 또는 목표가 올바르지 않습니다.");
+  return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, String(value)]));
+}
+
+function encodePayload(payload) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function marker(body, name) {
+  return body.match(new RegExp(`^${name}:(.+)$`, "m"))?.[1]?.trim() || "";
 }
 
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
-    }
-    if (request.method !== "POST" || new URL(request.url).pathname !== "/run") {
-      return json(origin, { ok: false, error: "Not found" }, 404);
-    }
-    if (origin !== ALLOWED_ORIGIN) {
-      return json(origin, { ok: false, error: "허용되지 않은 사이트입니다." }, 403);
-    }
+    const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (!["/run", "/status"].includes(url.pathname)) return json(origin, { ok: false, error: "Not found" }, 404);
+    if (origin !== ALLOWED_ORIGIN) return json(origin, { ok: false, error: "허용되지 않은 사이트입니다." }, 403);
 
     const authorization = request.headers.get("Authorization") || "";
-    const suppliedKey = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
-    if (!suppliedKey || !await secureEqual(suppliedKey, env.RUNNER_KEY)) {
-      return json(origin, { ok: false, error: "실행 인증이 필요합니다." }, 401);
+    const suppliedKey = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+    if (!suppliedKey || !await secureEqual(suppliedKey, env.RUNNER_KEY)) return json(origin, { ok: false, error: "실행 인증이 필요합니다." }, 401);
+
+    if (request.method === "GET" && url.pathname === "/status") {
+      const requestId = url.searchParams.get("id") || "";
+      if (!/^[a-f0-9-]{36}$/.test(requestId)) return json(origin, { ok: false, error: "잘못된 실행 번호입니다." }, 400);
+      const query = encodeURIComponent(`repo:${OWNER}/${REPO} in:title "[Classcard status] ${requestId}"`);
+      const response = await fetch(`https://api.github.com/search/issues?q=${query}`, { headers: githubHeaders(env, false) });
+      if (!response.ok) return json(origin, { ok: true, progress: "0/0", state: "queued" });
+      const result = await response.json();
+      const issue = (result.items || []).find((item) => item.title === `[Classcard status] ${requestId}`);
+      if (!issue) return json(origin, { ok: true, progress: "0/0", state: "queued" });
+      const body = issue.body || "";
+      return json(origin, {
+        ok: true,
+        progress: marker(body, "CLASSCARD_PROGRESS") || "0/0",
+        state: marker(body, "CLASSCARD_STATUS") || (issue.state === "closed" ? "completed" : "queued"),
+      });
     }
+    if (request.method !== "POST" || url.pathname !== "/run") return json(origin, { ok: false, error: "Not found" }, 404);
 
     let inputs;
-    try {
-      inputs = validate(await request.json());
-    } catch (error) {
-      return json(origin, { ok: false, error: error.message }, 400);
-    }
-
-    const response = await fetch(
-      `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/run.yml/dispatches`,
-      {
-        method: "POST",
-        headers: {
-          "Accept": "application/vnd.github+json",
-          "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
-          "Content-Type": "application/json",
-          "User-Agent": "classcard-free-runner",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-        body: JSON.stringify({ ref: "main", inputs }),
-      },
-    );
+    try { inputs = validate(await request.json()); } catch (error) { return json(origin, { ok: false, error: error.message }, 400); }
+    const requestId = crypto.randomUUID();
+    inputs.request_id = requestId;
+    const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/run.yml/dispatches`, {
+      method: "POST",
+      headers: githubHeaders(env),
+      body: JSON.stringify({ ref: "main", inputs }),
+    });
     if (!response.ok) {
-      console.error(JSON.stringify({ event: "github_dispatch_failed", status: response.status }));
-      return json(origin, { ok: false, error: "GitHub 실행 요청에 실패했습니다." }, 502);
+      console.error(JSON.stringify({ event: "github_issue_failed", status: response.status }));
+      return json(origin, { ok: false, error: "GitHub 실행을 시작하지 못했습니다." }, 502);
     }
-    console.log(JSON.stringify({ event: "workflow_dispatched", set_id: inputs.set_id }));
-    return json(origin, { ok: true, message: "학습 실행을 시작했습니다." }, 202);
+    return json(origin, { ok: true, id: requestId, message: "학습을 시작했습니다." }, 202);
   },
 };
