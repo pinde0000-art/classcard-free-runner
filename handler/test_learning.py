@@ -499,7 +499,37 @@ def solve_sentence_scramble(driver, answer):
                 except TimeoutException:
                     time.sleep(0.12)
             if not selected:
-                raise RuntimeError(f"문장 조각 {expected_token!r}을 선택하지 못했습니다.")
+                state = driver.execute_script(
+                    """
+                    const expected = arguments[0];
+                    return {
+                      matches: [...document.querySelectorAll(
+                        '#wrapper-test .test-sentence-words a'
+                      )].filter(el => (el.innerText || '').trim().toLocaleLowerCase()
+                        === expected).map(el => {
+                          const r = el.getBoundingClientRect();
+                          const x = r.left + r.width / 2;
+                          const y = r.top + r.height / 2;
+                          const hit = document.elementFromPoint(x, y);
+                          return {
+                            html: el.outerHTML,
+                            rect: {x, y, width: r.width, height: r.height},
+                            hit: hit && hit.outerHTML,
+                            display: getComputedStyle(el).display,
+                            visibility: getComputedStyle(el).visibility
+                          };
+                        }),
+                      selected: [...document.querySelectorAll(
+                        '.test-sentence-input'
+                      )].map(el => ({text: (el.innerText || '').trim(), html: el.outerHTML})),
+                      body: (document.body.innerText || '').slice(-600)
+                    };
+                    """,
+                    expected,
+                )
+                raise RuntimeError(
+                    f"문장 조각 {expected_token!r}을 선택하지 못했습니다. 상태: {state}"
+                )
             time.sleep(0.03)
 
         previous_signature = tuple(choice_texts)
