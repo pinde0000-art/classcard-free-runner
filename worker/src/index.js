@@ -57,7 +57,7 @@ function validate(payload) {
   if (!/^\d+$/.test(result.class_id) || !/^\d+$/.test(result.set_id)) throw new Error("클래스 또는 세트 번호가 올바르지 않습니다.");
   if (!Number.isInteger(result.start) || !Number.isInteger(result.end) || result.start < 1 || result.end < result.start || result.end > 1000) throw new Error("카드 범위가 올바르지 않습니다.");
   if (!Number.isInteger(result.card_count) || result.card_count < result.end || result.card_count > 1000) throw new Error("전체 카드 수가 올바르지 않습니다.");
-  if (![1, 2, 3].includes(result.mode) || ![1, 2, 3, 4].includes(result.amount)) throw new Error("학습 종류 또는 목표가 올바르지 않습니다.");
+  if (![1, 2, 3, 4].includes(result.mode) || ![1, 2, 3, 4].includes(result.amount)) throw new Error("학습 종류 또는 목표가 올바르지 않습니다.");
   return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, String(value)]));
 }
 
