@@ -337,6 +337,42 @@ def scramble_choice_texts(driver):
     return [norm_text(element.text) for element in scramble_choices(driver)]
 
 
+def debug_scramble_state(driver):
+    return driver.execute_script(
+        """
+        const passesBasic = (el) => {
+          const r = el.getBoundingClientRect();
+          const s = getComputedStyle(el);
+          return r.width > 0 && r.height > 0
+            && s.display !== 'none' && s.visibility !== 'hidden'
+            && parseFloat(s.opacity || '1') > 0.05
+            && r.bottom > 0 && r.top < innerHeight
+            && r.right > 0 && r.left < innerWidth;
+        };
+        const containers = [...document.querySelectorAll(
+          '#wrapper-test .test-sentence-words'
+        )];
+        return {
+          containerCount: containers.length,
+          containers: containers.map(container => {
+            const r = container.getBoundingClientRect();
+            const all = [...container.querySelectorAll('a')];
+            const unclicked = all.filter(el => !el.classList.contains('clicked'));
+            return {
+              class: container.className,
+              rect: {x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height)},
+              passesBasic: passesBasic(container),
+              totalPieces: all.length,
+              unclickedTexts: unclicked.map(el => (el.innerText || '').trim()),
+            };
+          }),
+          inputText: [...document.querySelectorAll('.test-sentence-input')]
+            .map(el => (el.innerText || '').trim()),
+        };
+        """
+    )
+
+
 def sentence_question(driver, records):
     text = norm_text(driver.execute_script("return document.body.innerText || '';"))
     matches = [
@@ -470,9 +506,11 @@ def solve_sentence_scramble(driver, answer):
                 WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
             except TimeoutException as error:
                 current_texts = scramble_choice_texts(driver)
+                debug_state = debug_scramble_state(driver)
                 raise RuntimeError(
                     f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
-                    f"이번 구간: {segment}, 현재 선택지: {current_texts}"
+                    f"이번 구간: {segment}, 현재 선택지: {current_texts}, "
+                    f"디버그: {debug_state}"
                 ) from error
             choice = found["choice"]
             used_ids.add(choice.id)
