@@ -58,6 +58,10 @@ function validate(payload) {
   if (!Number.isInteger(result.start) || !Number.isInteger(result.end) || result.start < 1 || result.end < result.start || result.end > 1000) throw new Error("카드 범위가 올바르지 않습니다.");
   if (!Number.isInteger(result.card_count) || result.card_count < result.end || result.card_count > 1000) throw new Error("전체 카드 수가 올바르지 않습니다.");
   if (![1, 2, 3, 4].includes(result.mode) || ![1, 2, 3, 4].includes(result.amount)) throw new Error("학습 종류 또는 목표가 올바르지 않습니다.");
+  if (result.mode === 4) {
+    result.start = 1;
+    result.end = result.card_count;
+  }
   return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, String(value)]));
 }
 
