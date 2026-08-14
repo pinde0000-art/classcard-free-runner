@@ -399,7 +399,23 @@ def solve_sentence_scramble(driver, answer):
                     "arguments[0].scrollIntoView({block: 'center'});",
                     choice,
                 )
-                ActionChains(driver).move_to_element(choice).click().perform()
+                if attempt == 0:
+                    choice.click()
+                elif attempt == 1:
+                    driver.execute_script("arguments[0].click();", choice)
+                elif attempt == 2:
+                    ActionChains(driver).move_to_element(choice).click().perform()
+                else:
+                    driver.execute_script(
+                        """
+                        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+                          arguments[0].dispatchEvent(new MouseEvent(type, {
+                            bubbles: true, cancelable: true, view: window
+                          }));
+                        }
+                        """,
+                        choice,
+                    )
             except StaleElementReferenceException:
                 if selected_sentence_token_count(driver) > before_count:
                     break
