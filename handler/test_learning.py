@@ -476,35 +476,11 @@ def solve_sentence_scramble(driver, answer):
         time.sleep(0.35)
         for expected_token in segment:
             expected = normalize_sentence_token(expected_token)
-            selected = False
-            for _ in range(5):
-                before_choices = len(visible_scramble_choice_texts(driver))
-                before_selected = selected_sentence_token_count(driver)
-                try:
-                    choice = WebDriverWait(driver, 1, poll_frequency=0.02).until(
-                        lambda d: find_scramble_choice(d, expected)
-                    )
-                    native_pointer_click(driver, choice)
-                    WebDriverWait(driver, 0.7, poll_frequency=0.02).until(
-                        lambda d: len(visible_scramble_choice_texts(d))
-                        < before_choices
-                        or selected_sentence_token_count(d) > before_selected
-                    )
-                    selected = True
-                    break
-                except StaleElementReferenceException:
-                    if (
-                        len(visible_scramble_choice_texts(driver)) < before_choices
-                        or selected_sentence_token_count(driver) > before_selected
-                    ):
-                        selected = True
-                        break
-                    time.sleep(0.08)
-                except TimeoutException:
-                    time.sleep(0.12)
-            if not selected:
-                raise RuntimeError(f"문장 조각 {expected_token!r}을 선택하지 못했습니다.")
-            time.sleep(0.03)
+            choice = WebDriverWait(driver, 3, poll_frequency=0.02).until(
+                lambda d: find_scramble_choice(d, expected)
+            )
+            native_pointer_click(driver, choice)
+            time.sleep(0.08)
 
         previous_signature = tuple(choice_texts)
         submit = next(
