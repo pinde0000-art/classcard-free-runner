@@ -388,6 +388,7 @@ def solve_sentence_scramble(driver, answer):
     for expected_token in tokens:
         expected = normalize_sentence_token(expected_token)
         before_count = selected_sentence_token_count(driver)
+        before_choices = visible_scramble_choice_count(driver)
         for attempt in range(4):
             try:
                 dismiss_test_focus_warning(driver)
@@ -395,9 +396,10 @@ def solve_sentence_scramble(driver, answer):
                     lambda d: find_scramble_choice(d, expected)
                 )
                 driver.execute_script(
-                    "arguments[0].scrollIntoView({block: 'center'}); arguments[0].click();",
+                    "arguments[0].scrollIntoView({block: 'center'});",
                     choice,
                 )
+                ActionChains(driver).move_to_element(choice).click().perform()
             except StaleElementReferenceException:
                 if selected_sentence_token_count(driver) > before_count:
                     break
@@ -408,12 +410,16 @@ def solve_sentence_scramble(driver, answer):
             try:
                 WebDriverWait(driver, 1.5, poll_frequency=0.01).until(
                     lambda d: selected_sentence_token_count(d) > before_count
+                    or visible_scramble_choice_count(d) < before_choices
                 )
                 time.sleep(0.03)
                 break
             except TimeoutException:
                 dismiss_test_focus_warning(driver)
-                if selected_sentence_token_count(driver) > before_count:
+                if (
+                    selected_sentence_token_count(driver) > before_count
+                    or visible_scramble_choice_count(driver) < before_choices
+                ):
                     break
                 if attempt == 3:
                     raise RuntimeError(
