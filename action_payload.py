@@ -95,7 +95,7 @@ total = int(payload["end"]) - int(payload["start"]) + 1
 progress_issue = ensure_progress_issue(total)
 fallback_completed = 0
 last_progress = ""
-report_progress(f"0/{total}")
+report_progress(f"0/{total}", "preparing")
 process = subprocess.Popen(
     [sys.executable, "-u", "dynamic_learning.py", "--payload-base64", encoded],
     stdout=subprocess.PIPE,
