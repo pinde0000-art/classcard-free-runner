@@ -98,10 +98,6 @@ def login(driver):
                         "path": cookie.path or "/",
                     }
                 )
-            driver.get("https://www.classcard.net/Main")
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".left-class-list"))
-            )
             return
     except Exception as error:
         log(f"HTTP login fallback failed: {type(error).__name__}: {error}")
