@@ -1,6 +1,7 @@
 import html
 import re
 import time
+from collections import Counter
 
 from selenium import webdriver
 from selenium.common.exceptions import (
@@ -378,75 +379,80 @@ def selected_sentence_token_count(driver):
 
 
 def solve_sentence_scramble(driver, answer):
-    tokens = [
+    raw_tokens = [
         token for token in str(answer or "").split()
         if normalize_sentence_token(token)
     ]
-    if not tokens:
+    if not raw_tokens:
         raise RuntimeError("문장 배열 정답이 비어 있습니다.")
+    normalized = [normalize_sentence_token(token) for token in raw_tokens]
+    expected_start = 0
 
-    for expected_token in tokens:
-        expected = normalize_sentence_token(expected_token)
-        for attempt in range(3):
-            try:
-                dismiss_test_focus_warning(driver)
-                try:
-                    choice = WebDriverWait(driver, 5, poll_frequency=0.01).until(
-                        lambda d: find_scramble_choice(d, expected)
-                    )
-                except TimeoutException as error:
-                    state = driver.execute_script(
-                        """
-                        return {
-                          choices: [...document.querySelectorAll(
-                            '#wrapper-test .test-sentence-words a'
-                          )].map(el => ({
-                            text: (el.innerText || '').trim(),
-                            className: el.className,
-                            visible: !!(el.offsetWidth || el.offsetHeight)
-                          })),
-                          selected: [...document.querySelectorAll(
-                            '.test-sentence-input'
-                          )].map(el => (el.innerText || '').trim()),
-                          body: (document.body.innerText || '').slice(-700)
-                        };
-                        """
-                    )
-                    raise RuntimeError(
-                        f"문장 조각 {expected_token!r}을 찾지 못했습니다. 상태: {state}"
-                    ) from error
-                driver.execute_script(
-                    "arguments[0].scrollIntoView({block: 'center'});",
-                    choice,
-                )
-                if attempt == 0:
-                    choice.click()
-                elif attempt == 1:
-                    ActionChains(driver).move_to_element(choice).click().perform()
-                else:
-                    driver.execute_script("arguments[0].click();", choice)
-                time.sleep(0.06)
+    while expected_start < len(raw_tokens):
+        dismiss_test_focus_warning(driver)
+        choices = WebDriverWait(driver, 6, poll_frequency=0.02).until(
+            lambda d: visible_scramble_choices(d) or None
+        )
+        choice_texts = [choice.text.strip() for choice in choices]
+        choice_tokens = [normalize_sentence_token(text) for text in choice_texts]
+
+        segment = None
+        segment_end = expected_start
+        for start in range(expected_start, len(raw_tokens) - len(choice_tokens) + 1):
+            end = start + len(choice_tokens)
+            if Counter(normalized[start:end]) == Counter(choice_tokens):
+                segment = raw_tokens[start:end]
+                segment_end = end
                 break
-            except StaleElementReferenceException:
-                if attempt == 2:
-                    raise
-                continue
-        else:
-            raise RuntimeError(f"문장 조각 {expected_token!r}을 선택하지 못했습니다.")
-
-    submit = next(
-        (
-            element
-            for element in driver.find_elements(
-                By.CSS_SELECTOR, ".btn-current-send-input"
+        if segment is None:
+            raise RuntimeError(
+                "문장 배열 조각을 원문과 맞추지 못했습니다. "
+                f"현재 조각: {choice_texts}, 남은 원문: {raw_tokens[expected_start:]}"
             )
-            if element.is_displayed() and element.is_enabled()
-        ),
-        None,
-    )
-    if submit is None:
-        raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
-    ActionChains(driver).move_to_element(submit).click().perform()
+
+        # 등장 애니메이션 중에는 클릭이 무시되므로 짧게 안정화한 뒤 누른다.
+        time.sleep(0.35)
+        used_ids = set()
+        for expected_token in segment:
+            expected = normalize_sentence_token(expected_token)
+            choice = next(
+                (
+                    element
+                    for element in visible_scramble_choices(driver)
+                    if element.id not in used_ids
+                    and normalize_sentence_token(element.text) == expected
+                ),
+                None,
+            )
+            if choice is None:
+                raise RuntimeError(f"문장 조각 {expected_token!r}을 찾지 못했습니다.")
+            used_ids.add(choice.id)
+            driver.execute_script("arguments[0].click();", choice)
+            time.sleep(0.05)
+
+        previous_signature = tuple(choice_texts)
+        submit = next(
+            (
+                element
+                for element in driver.find_elements(
+                    By.CSS_SELECTOR, ".btn-current-send-input"
+                )
+                if element.is_displayed() and element.is_enabled()
+            ),
+            None,
+        )
+        if submit is None:
+            raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
+        driver.execute_script("arguments[0].click();", submit)
+        expected_start = segment_end
+
+        if expected_start < len(raw_tokens):
+            WebDriverWait(driver, 6, poll_frequency=0.03).until(
+                lambda d: tuple(
+                    element.text.strip()
+                    for element in visible_scramble_choices(d)
+                ) != previous_signature
+            )
 
 
 def wait_for_next_question(driver, number):
