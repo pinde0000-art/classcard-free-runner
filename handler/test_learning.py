@@ -768,6 +768,8 @@ class TestLearning:
         completed = 0
         expected_count = max(1, num_d - 1)
         last_number = None
+        same_number_since = None
+        SAME_NUMBER_TIMEOUT = 20
         while not test_complete(driver):
             if not window_is_open(driver):
                 raise NoSuchWindowException("테스트 중 브라우저 창이 닫혔습니다.")
@@ -783,8 +785,24 @@ class TestLearning:
                 )
                 continue
             if number == last_number:
+                # wait_for_next_question()이 다음 문항으로의 전환을 잘못
+                # 감지했거나(예: current_number()가 잠깐 None이었다가 다시
+                # 이전 번호로 돌아옴) 사이트가 실제로 멈춘 경우, 0.1초 재시도만
+                # 반복하면 아무 타임아웃 없이 계속 돈다. 일정 시간 이상
+                # 그대로면 진단과 함께 실패시킨다.
+                if same_number_since is None:
+                    same_number_since = time.time()
+                elif time.time() - same_number_since > SAME_NUMBER_TIMEOUT:
+                    state = norm_text(
+                        driver.execute_script("return document.body.innerText || '';")
+                    )
+                    raise RuntimeError(
+                        f"테스트 문항 번호가 {number}에서 {SAME_NUMBER_TIMEOUT}초 이상 "
+                        f"바뀌지 않았습니다. 화면={state[:300]!r}"
+                    )
                 time.sleep(0.1)
                 continue
+            same_number_since = None
 
             answers = answer_candidates(question, records)
             if not answers:
