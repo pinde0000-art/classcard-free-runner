@@ -470,17 +470,18 @@ def selected_sentence_token_count(driver):
 
 
 def native_pointer_click(driver, element):
-    # inline: 'center'는 굳이 필요하지 않을 때도 가로 스크롤을 유발할 수 있고,
-    # 사이트에 smooth-scroll CSS가 걸려 있으면 scrollIntoView가 즉시 끝나지
-    # 않는다. behavior: 'instant'로 애니메이션을 끄고, inline: 'nearest'로
-    # 불필요한 스크롤을 줄인 뒤, 좌표를 구하기 전에 위치가 안정될 때까지
-    # 기다린다(그렇지 않으면 스크롤이 끝나기 전 좌표를 계산해 엉뚱한 곳을
-    # 클릭하고도 예외 없이 "성공"한 것처럼 보일 수 있다).
     driver.execute_script(
-        "arguments[0].scrollIntoView({behavior: 'instant', block: 'center', inline: 'nearest'});",
+        "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
         element,
     )
-    point = _settle_and_locate(driver, element)
+    time.sleep(0.03)
+    point = driver.execute_script(
+        """
+        const r = arguments[0].getBoundingClientRect();
+        return {x: r.left + r.width / 2, y: r.top + r.height / 2};
+        """,
+        element,
+    )
     driver.execute_cdp_cmd(
         "Input.dispatchMouseEvent",
         {"type": "mouseMoved", "x": point["x"], "y": point["y"]},
@@ -496,35 +497,6 @@ def native_pointer_click(driver, element):
                 "clickCount": 1,
             },
         )
-
-
-def _settle_and_locate(driver, element):
-    return driver.execute_async_script(
-        """
-        const [el, done] = arguments;
-        const read = () => {
-          const r = el.getBoundingClientRect();
-          return {x: r.left + r.width / 2, y: r.top + r.height / 2};
-        };
-        let previous = read();
-        let attempts = 0;
-        const tick = () => {
-          attempts += 1;
-          const current = read();
-          if (
-            (Math.abs(current.x - previous.x) < 0.5 && Math.abs(current.y - previous.y) < 0.5)
-            || attempts >= 8
-          ) {
-            done(current);
-            return;
-          }
-          previous = current;
-          setTimeout(tick, 25);
-        };
-        setTimeout(tick, 25);
-        """,
-        element,
-    )
 
 
 def solve_sentence_scramble(driver, answer):
