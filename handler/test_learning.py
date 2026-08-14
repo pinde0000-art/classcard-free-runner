@@ -587,6 +587,9 @@ class TestLearning:
 
     def run(self, num_d: int, word_d: list) -> int:
         driver = self.driver
+        driver.execute_cdp_cmd(
+            "Emulation.setFocusEmulationEnabled", {"enabled": True}
+        )
         records = build_records(word_d)
         if not records:
             raise RuntimeError("테스트 정답에 사용할 카드 데이터가 없습니다.")
