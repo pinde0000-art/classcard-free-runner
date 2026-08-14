@@ -393,6 +393,31 @@ def selected_sentence_token_count(driver):
     return len(norm_text(text).split())
 
 
+def native_pointer_click(driver, element):
+    point = driver.execute_script(
+        """
+        const r = arguments[0].getBoundingClientRect();
+        return {x: r.left + r.width / 2, y: r.top + r.height / 2};
+        """,
+        element,
+    )
+    driver.execute_cdp_cmd(
+        "Input.dispatchMouseEvent",
+        {"type": "mouseMoved", "x": point["x"], "y": point["y"]},
+    )
+    for event_type in ("mousePressed", "mouseReleased"):
+        driver.execute_cdp_cmd(
+            "Input.dispatchMouseEvent",
+            {
+                "type": event_type,
+                "x": point["x"],
+                "y": point["y"],
+                "button": "left",
+                "clickCount": 1,
+            },
+        )
+
+
 def solve_sentence_scramble(driver, answer):
     raw_tokens = [
         token for token in str(answer or "").split()
@@ -447,37 +472,7 @@ def solve_sentence_scramble(driver, answer):
             if choice is None:
                 raise RuntimeError(f"문장 조각 {expected_token!r}을 찾지 못했습니다.")
             used_ids.add(choice.id)
-            point = driver.execute_script(
-                """
-                const r = arguments[0].getBoundingClientRect();
-                return {x: r.left + r.width / 2, y: r.top + r.height / 2};
-                """,
-                choice,
-            )
-            driver.execute_cdp_cmd(
-                "Input.dispatchMouseEvent",
-                {"type": "mouseMoved", "x": point["x"], "y": point["y"]},
-            )
-            driver.execute_cdp_cmd(
-                "Input.dispatchMouseEvent",
-                {
-                    "type": "mousePressed",
-                    "x": point["x"],
-                    "y": point["y"],
-                    "button": "left",
-                    "clickCount": 1,
-                },
-            )
-            driver.execute_cdp_cmd(
-                "Input.dispatchMouseEvent",
-                {
-                    "type": "mouseReleased",
-                    "x": point["x"],
-                    "y": point["y"],
-                    "button": "left",
-                    "clickCount": 1,
-                },
-            )
+            native_pointer_click(driver, choice)
             time.sleep(0.05)
 
         previous_signature = tuple(choice_texts)
@@ -514,15 +509,27 @@ def wait_for_next_question(driver, number):
         ):
             return
 
-        # 문장 배열은 채점 후 Good Job! 상태에서 제출을 한 번 더 눌러야 한다.
-        for selector in [
-            ".test-bottom .correct .btn-current-send-input",
-            ".test-bottom .wrong .btn-current-send-input",
-        ]:
-            for element in driver.find_elements(By.CSS_SELECTOR, selector):
+        candidates = driver.find_elements(
+            By.XPATH,
+            "//*[self::a or self::button]"
+            "[normalize-space(.)='다음' or normalize-space(.)='다음 문제' "
+            "or normalize-space(.)='계속' or normalize-space(.)='확인']",
+        )
+        candidates.extend(
+            driver.find_elements(
+                By.CSS_SELECTOR,
+                ".test-bottom .btn-current-send-input, "
+                ".btn-next, .btn-next-question, .btn-confirm",
+            )
+        )
+        for element in candidates:
+            try:
                 if element.is_displayed() and element.is_enabled():
-                    driver.execute_script("arguments[0].click();", element)
+                    native_pointer_click(driver, element)
+                    time.sleep(0.12)
                     break
+            except StaleElementReferenceException:
+                continue
         time.sleep(0.1)
 
     raise TimeoutException(f"테스트 {number}번 다음 문제로 넘어가지 못했습니다.")
