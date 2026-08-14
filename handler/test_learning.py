@@ -403,14 +403,9 @@ def dismiss_test_focus_warning(driver):
     )
 
 
-def find_scramble_choice(driver, expected, used_ids):
-    # used_ids: already-clicked piece ids for this segment. Needed because a
-    # repeated word can appear twice in one segment, and re-searching before
-    # the site adds .clicked would re-click (and thus deselect) the same tile.
+def find_scramble_choice(driver, expected):
     for element in scramble_choices(driver):
         try:
-            if element.id in used_ids:
-                continue
             if normalize_sentence_token(element.text) == expected:
                 return element
         except StaleElementReferenceException:
@@ -468,6 +463,9 @@ def solve_sentence_scramble(driver, answer):
         raise RuntimeError("문장 배열 정답이 비어 있습니다.")
     normalized = [normalize_sentence_token(token) for token in raw_tokens]
     expected_start = 0
+    # 첫 조회, 그리고 매 제출 직후에는 조각이 등장하는 애니메이션 중이라 클릭이
+    # 무시될 수 있어 짧게 안정화 시간을 둔다.
+    just_revealed = True
 
     while expected_start < len(raw_tokens):
         dismiss_test_focus_warning(driver)
@@ -480,6 +478,10 @@ def solve_sentence_scramble(driver, answer):
             if normalize_sentence_token(text)
         ]
 
+        # 첫 조각을 클릭한 뒤에야 사이트가 현재 줄의 실제 길이를 확정하고 다음
+        # 줄의 조각을 DOM에서 지우는 경우가 있다(처음엔 두 줄 분량이 함께 보이다
+        # 첫 클릭 후 현재 줄 분량만 남는 식). 그래서 구간을 한 번만 계산해 여러
+        # 단어를 미리 계획해 클릭하지 않고, 매 클릭 전에 다시 계산한다.
         segment = None
         segment_end = expected_start
         for start in range(expected_start, len(raw_tokens) - len(choice_tokens) + 1):
@@ -494,74 +496,70 @@ def solve_sentence_scramble(driver, answer):
                 f"현재 조각: {choice_texts}, 남은 원문: {raw_tokens[expected_start:]}"
             )
 
-        # 등장 애니메이션 중에는 클릭이 무시되므로 짧게 안정화한 뒤 누른다.
-        time.sleep(0.35)
-        # 같은 단어가 한 구간에 두 번 이상 나올 수 있어(예: "a plane ... a doctor"),
-        # 사이트가 .clicked 클래스를 붙이기 전에 같은 조각을 다시 찾아 재클릭해
-        # 선택이 취소되는 것을 막기 위해 이번 구간에서 클릭한 조각의 id를 기억한다.
-        used_ids = set()
-        for expected_token in segment:
-            expected = normalize_sentence_token(expected_token)
-            clicked = False
-            stale_error = None
-            # 사이트가 조각 DOM을 매우 빠르게 다시 그리기 때문에, 찾아낸 조각을
-            # 클릭하는 순간 이미 stale이 되어 있을 수 있다. 이때는 used_ids에
-            # 기록하지 않고(= 아직 클릭되지 않은 것으로 보고) 다시 찾는다.
-            for _ in range(5):
-                found = {}
+        if just_revealed:
+            time.sleep(0.35)
+            just_revealed = False
 
-                def locate(d, expected=expected, found=found):
-                    match = find_scramble_choice(d, expected, used_ids)
-                    if match is None:
-                        return False
-                    found["choice"] = match
-                    return True
+        expected_token = segment[0]
+        expected = normalize_sentence_token(expected_token)
+        found = {}
 
-                try:
-                    WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
-                except TimeoutException as error:
-                    current_texts = scramble_choice_texts(driver)
-                    debug_state = debug_scramble_state(driver)
-                    raise RuntimeError(
-                        f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
-                        f"이번 구간: {segment}, 현재 선택지: {current_texts}, "
-                        f"디버그: {debug_state}"
-                    ) from error
-                choice = found["choice"]
-                try:
-                    native_pointer_click(driver, choice)
-                except StaleElementReferenceException as error:
-                    stale_error = error
-                    continue
-                used_ids.add(choice.id)
-                clicked = True
-                break
-            if not clicked:
-                raise RuntimeError(
-                    f"문장 조각 {expected_token!r} 클릭이 계속 stale 상태로 실패했습니다."
-                ) from stale_error
-            time.sleep(0.08)
+        def locate(d, expected=expected, found=found):
+            match = find_scramble_choice(d, expected)
+            if match is None:
+                return False
+            found["choice"] = match
+            return True
 
-        previous_signature = tuple(choice_texts)
-        submit = next(
-            (
-                element
-                for element in driver.find_elements(
-                    By.CSS_SELECTOR, ".btn-current-send-input"
-                )
-                if element.is_displayed() and element.is_enabled()
-            ),
-            None,
-        )
-        if submit is None:
-            raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
-        driver.execute_script("arguments[0].click();", submit)
-        expected_start = segment_end
+        try:
+            WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
+        except TimeoutException as error:
+            current_texts = scramble_choice_texts(driver)
+            debug_state = debug_scramble_state(driver)
+            raise RuntimeError(
+                f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
+                f"남은 원문: {raw_tokens[expected_start:]}, 현재 선택지: {current_texts}, "
+                f"디버그: {debug_state}"
+            ) from error
 
-        if expected_start < len(raw_tokens):
-            WebDriverWait(driver, 6, poll_frequency=0.03).until(
-                lambda d: tuple(scramble_choice_texts(d)) != previous_signature
+        try:
+            native_pointer_click(driver, found["choice"])
+        except StaleElementReferenceException:
+            # 클릭 직전에 조각 DOM이 다시 그려졌다. used_ids 없이 매번 새로
+            # 조회하므로, 다음 바깥 루프 반복에서 같은 단어를 다시 찾으면 된다.
+            continue
+
+        expected_start += 1
+        real_choice_count = len(choice_tokens)
+        try:
+            WebDriverWait(driver, 2, poll_frequency=0.02).until(
+                lambda d: sum(
+                    1 for text in scramble_choice_texts(d)
+                    if normalize_sentence_token(text)
+                ) < real_choice_count
             )
+        except TimeoutException:
+            pass  # 다음 반복의 새 조회가 실제 상태를 다시 확인해 준다.
+        else:
+            time.sleep(0.05)
+
+        if expected_start == segment_end:
+            submit = next(
+                (
+                    element
+                    for element in driver.find_elements(
+                        By.CSS_SELECTOR, ".btn-current-send-input"
+                    )
+                    if element.is_displayed() and element.is_enabled()
+                ),
+                None,
+            )
+            if submit is None:
+                raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
+            driver.execute_script("arguments[0].click();", submit)
+            just_revealed = True
+            if expected_start < len(raw_tokens):
+                time.sleep(0.2)
 
 
 def wait_for_next_question(driver, number):
