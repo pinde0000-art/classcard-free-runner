@@ -102,11 +102,14 @@ export default {
       }
       if (!issue) return json(origin, { ok: true, progress: "0/0", state: "queued" });
       const body = issue.body || "";
+      let state = marker(body, "CLASSCARD_STATUS") || (issue.state === "closed" ? "completed" : "queued");
+      const age = Date.now() - Date.parse(issue.created_at || 0);
+      if (state === "running" && !body.includes("CLASSCARD_PAYLOAD:") && age > 180000) state = "failed";
       return json(origin, {
         ok: true,
         issue: issue.number,
         progress: marker(body, "CLASSCARD_PROGRESS") || "0/0",
-        state: marker(body, "CLASSCARD_STATUS") || (issue.state === "closed" ? "completed" : "queued"),
+        state,
       });
     }
     if (request.method !== "POST" || url.pathname !== "/run") return json(origin, { ok: false, error: "Not found" }, 404);
@@ -137,6 +140,11 @@ export default {
     });
     if (!response.ok) {
       console.error(JSON.stringify({ event: "github_issue_failed", status: response.status }));
+      await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues/${issue.number}`, {
+        method: "PATCH",
+        headers: githubHeaders(env),
+        body: JSON.stringify({ body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:failed`, state: "closed" }),
+      });
       return json(origin, { ok: false, error: "GitHub 실행을 시작하지 못했습니다." }, 502);
     }
     return json(origin, { ok: true, id: requestId, issue: issue.number, message: "학습을 시작했습니다." }, 202);
