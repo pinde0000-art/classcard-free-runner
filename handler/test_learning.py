@@ -387,9 +387,7 @@ def solve_sentence_scramble(driver, answer):
 
     for expected_token in tokens:
         expected = normalize_sentence_token(expected_token)
-        before_count = selected_sentence_token_count(driver)
-        before_choices = visible_scramble_choice_count(driver)
-        for attempt in range(4):
+        for attempt in range(3):
             try:
                 dismiss_test_focus_warning(driver)
                 choice = WebDriverWait(driver, 5, poll_frequency=0.01).until(
@@ -402,45 +400,17 @@ def solve_sentence_scramble(driver, answer):
                 if attempt == 0:
                     choice.click()
                 elif attempt == 1:
-                    driver.execute_script("arguments[0].click();", choice)
-                elif attempt == 2:
                     ActionChains(driver).move_to_element(choice).click().perform()
                 else:
-                    driver.execute_script(
-                        """
-                        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-                          arguments[0].dispatchEvent(new MouseEvent(type, {
-                            bubbles: true, cancelable: true, view: window
-                          }));
-                        }
-                        """,
-                        choice,
-                    )
+                    driver.execute_script("arguments[0].click();", choice)
+                time.sleep(0.06)
+                break
             except StaleElementReferenceException:
-                if selected_sentence_token_count(driver) > before_count:
-                    break
-                if attempt == 3:
+                if attempt == 2:
                     raise
                 continue
-
-            try:
-                WebDriverWait(driver, 1.5, poll_frequency=0.01).until(
-                    lambda d: selected_sentence_token_count(d) > before_count
-                    or visible_scramble_choice_count(d) < before_choices
-                )
-                time.sleep(0.03)
-                break
-            except TimeoutException:
-                dismiss_test_focus_warning(driver)
-                if (
-                    selected_sentence_token_count(driver) > before_count
-                    or visible_scramble_choice_count(driver) < before_choices
-                ):
-                    break
-                if attempt == 3:
-                    raise RuntimeError(
-                        f"문장 조각 {expected_token!r}을 선택하지 못했습니다."
-                    )
+        else:
+            raise RuntimeError(f"문장 조각 {expected_token!r}을 선택하지 못했습니다.")
 
     submit = next(
         (
