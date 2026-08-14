@@ -610,25 +610,30 @@ def solve_sentence_scramble(driver, answer):
         # 여유 시간을 그대로 둔다.
         time.sleep(0.08)
 
-        # 다음 줄에 속한 단어는 화면/DOM에는 이미 보여도(예: 'and'가 'York'을
-        # 놓기 전부터 목록에 있음) 이번 줄을 제출하기 전에는 실제로 클릭이
-        # 먹지 않는다. 그래서 "선택지가 비었는지"가 아니라, 사이트가 실제로
-        # 제출 가능하다고 표시하는 .btn-current-send-input의 활성화 여부로
-        # 지금 줄이 끝났는지를 판단한다.
-        submit = next(
-            (
-                element
-                for element in driver.find_elements(
-                    By.CSS_SELECTOR, ".btn-current-send-input"
+        # .btn-current-send-input는 단어 하나만 놓아도 활성화돼 있어("A"만
+        # 놓은 상태에서 눌러도 사라지지 않고 이후 클릭이 전혀 먹지 않게 됨,
+        # 31812103010 등에서 확인) 줄 완료 신호로 쓸 수 없다. 대신 이번에
+        # 보이던 실제 단어 조각을 모두 놓았으면(장식용 —만 남거나 아예
+        # 비었으면) 지금 줄을 제출한다. 두 번 연속 비어 있을 때만 제출해,
+        # DOM이 다시 그려지는 중에 잠깐 비어 보이는 경우를 걸러낸다.
+        if not [t for t in scramble_choice_texts(driver) if normalize_sentence_token(t)]:
+            time.sleep(0.15)
+            if not [t for t in scramble_choice_texts(driver) if normalize_sentence_token(t)]:
+                submit = next(
+                    (
+                        element
+                        for element in driver.find_elements(
+                            By.CSS_SELECTOR, ".btn-current-send-input"
+                        )
+                        if element.is_displayed() and element.is_enabled()
+                    ),
+                    None,
                 )
-                if element.is_displayed() and element.is_enabled()
-            ),
-            None,
-        )
-        if submit is not None:
-            driver.execute_script("arguments[0].click();", submit)
-            just_revealed = True
-            time.sleep(0.2)
+                if submit is None:
+                    raise RuntimeError("문장 배열 제출 버튼을 찾지 못했습니다.")
+                driver.execute_script("arguments[0].click();", submit)
+                just_revealed = True
+                time.sleep(0.2)
 
 
 def wait_for_next_question(driver, number):
