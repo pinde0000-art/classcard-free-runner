@@ -104,7 +104,7 @@ export default {
       const body = issue.body || "";
       let state = marker(body, "CLASSCARD_STATUS") || (issue.state === "closed" ? "completed" : "queued");
       const age = Date.now() - Date.parse(issue.created_at || 0);
-      if (state === "running" && !body.includes("CLASSCARD_PAYLOAD:") && age > 180000) state = "failed";
+      if (["running", "preparing"].includes(state) && !body.includes("CLASSCARD_PAYLOAD:") && age > 180000) state = "failed";
       return json(origin, {
         ok: true,
         issue: issue.number,
@@ -124,7 +124,7 @@ export default {
       headers: githubHeaders(env),
       body: JSON.stringify({
         title: `[Classcard status] ${requestId}`,
-        body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:running`,
+        body: `CLASSCARD_PROGRESS:0/${total}\nCLASSCARD_STATUS:preparing`,
       }),
     });
     if (!issueResponse.ok) {
