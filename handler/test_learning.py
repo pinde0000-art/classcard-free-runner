@@ -290,13 +290,8 @@ def visible_scramble_choices(driver):
         )].filter(el => {
           const r = el.getBoundingClientRect();
           const s = getComputedStyle(el);
-          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-          const hit = document.elementFromPoint(x, y);
           return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden' && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth && hit
-            && (hit === el || el.contains(hit) || hit.contains(el))
+            && s.visibility !== 'hidden'
             && (el.innerText || '').trim();
         });
         """
@@ -333,15 +328,11 @@ def find_scramble_choice(driver, expected):
         )].find(el => {
           const r = el.getBoundingClientRect();
           const s = getComputedStyle(el);
-          const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-          const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-          const hit = document.elementFromPoint(x, y);
-          const token = (el.innerText || '').replace(/\u2019/g, "'")
+          const token = (el.innerText || '').toLocaleLowerCase()
+            .replace(/\u2019/g, "'")
             .replace(/[^\p{L}\p{N}_']/gu, '');
           return r.width > 0 && r.height > 0 && s.display !== 'none'
-            && s.visibility !== 'hidden' && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth && hit
-            && (hit === el || el.contains(hit) || hit.contains(el))
+            && s.visibility !== 'hidden'
             && token === expected;
         }) || null;
         """,
@@ -376,12 +367,9 @@ def selected_sentence_token_count(driver):
         const el = [...document.querySelectorAll('.test-sentence-input')]
           .find(node => {
             const r = node.getBoundingClientRect();
-            const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
-            const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
-            const hit = document.elementFromPoint(x, y);
-            return r.width > 0 && r.height > 0 && r.bottom > 0
-              && r.top < innerHeight && r.right > 0 && r.left < innerWidth
-              && hit && (hit === node || node.contains(hit) || hit.contains(node));
+            const style = getComputedStyle(node);
+            return r.width > 0 && r.height > 0 && style.display !== 'none'
+              && style.visibility !== 'hidden';
           });
         return el ? (el.innerText || '') : '';
         """
@@ -398,7 +386,7 @@ def solve_sentence_scramble(driver, answer):
         raise RuntimeError("문장 배열 정답이 비어 있습니다.")
 
     for expected_token in tokens:
-        expected = exact_sentence_token(expected_token)
+        expected = normalize_sentence_token(expected_token)
         before_count = selected_sentence_token_count(driver)
         for attempt in range(4):
             try:
@@ -406,7 +394,10 @@ def solve_sentence_scramble(driver, answer):
                 choice = WebDriverWait(driver, 5, poll_frequency=0.01).until(
                     lambda d: find_scramble_choice(d, expected)
                 )
-                ActionChains(driver).move_to_element(choice).click().perform()
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'}); arguments[0].click();",
+                    choice,
+                )
             except StaleElementReferenceException:
                 if selected_sentence_token_count(driver) > before_count:
                     break
