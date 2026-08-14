@@ -69,38 +69,53 @@ def save_checkpoint(checkpoint):
     )
 
 
-def login(driver):
+def create_login_session(account=None, user_agent=None):
+    account = account or get_account()
+    session = requests.Session()
+    if user_agent:
+        session.headers.update({"User-Agent": user_agent})
+    session.get("https://www.classcard.net/Login", timeout=20)
+    response = session.post(
+        "https://www.classcard.net/LoginProc",
+        data={"login_id": account["id"], "login_pwd": account["pw"]},
+        headers={
+            "Referer": "https://www.classcard.net/Login",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+        timeout=20,
+    )
+    if response.json().get("result") != "ok":
+        raise RuntimeError("클래스카드 HTTP 로그인에 실패했습니다.")
+    return session
+
+
+def install_session_cookies(driver, session):
+    driver.execute_cdp_cmd("Network.enable", {})
+    for cookie in session.cookies:
+        params = {
+            "name": cookie.name,
+            "value": cookie.value,
+            "domain": cookie.domain or "www.classcard.net",
+            "path": cookie.path or "/",
+            "secure": bool(cookie.secure),
+        }
+        result = driver.execute_cdp_cmd("Network.setCookie", params)
+        if not result.get("success", False):
+            raise RuntimeError(f"로그인 쿠키를 설정하지 못했습니다: {cookie.name}")
+
+
+def login(driver, authenticated_session=None):
     account = get_account()
 
     # Cloud Chrome can miss the site's client-side login redirect. Create the
     # authenticated session over HTTP and transfer its cookies to Chrome first.
     try:
-        user_agent = driver.execute_script("return navigator.userAgent")
-        session = requests.Session()
-        session.headers.update({"User-Agent": user_agent})
-        session.get("https://www.classcard.net/Login", timeout=20)
-        response = session.post(
-            "https://www.classcard.net/LoginProc",
-            data={"login_id": account["id"], "login_pwd": account["pw"]},
-            headers={
-                "Referer": "https://www.classcard.net/Login",
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            timeout=20,
+        session = authenticated_session or create_login_session(
+            account,
+            driver.execute_script("return navigator.userAgent"),
         )
-        if response.json().get("result") == "ok":
-            # Visit a tiny same-origin resource only to unlock cookie injection.
-            # The next navigation goes straight to the selected set.
-            driver.get("https://www.classcard.net/favicon.ico")
-            for cookie in session.cookies:
-                driver.add_cookie(
-                    {
-                        "name": cookie.name,
-                        "value": cookie.value,
-                        "path": cookie.path or "/",
-                    }
-                )
-            return
+        install_session_cookies(driver, session)
+        return
     except Exception as error:
         log(f"HTTP login fallback failed: {type(error).__name__}: {error}")
 
