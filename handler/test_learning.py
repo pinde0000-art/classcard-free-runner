@@ -541,6 +541,26 @@ def solve_sentence_scramble(driver, answer):
                 f"문장 배열 {expected_start}번째 단어({raw_tokens[expected_start]!r})에서 "
                 f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
             )
+        if stall_attempts == 4:
+            # 같은 단어를 여러 번 눌러도 반영되지 않는 경우, 사실 지금 줄은
+            # 이미 완성됐는데 다음 줄 조각이 미리 보이느라(아직 클릭은 안
+            # 먹음) 조각 목록이 비어 보이지 않아 제출 타이밍을 놓쳤을 수
+            # 있다. 제출 버튼이 눌릴 수 있는 상태면 한 번 시도해 본다.
+            submit = next(
+                (
+                    element
+                    for element in driver.find_elements(
+                        By.CSS_SELECTOR, ".btn-current-send-input"
+                    )
+                    if element.is_displayed() and element.is_enabled()
+                ),
+                None,
+            )
+            if submit is not None:
+                driver.execute_script("arguments[0].click();", submit)
+                just_revealed = True
+                time.sleep(0.3)
+                continue
 
         choice_texts = stable_scramble_choice_texts(driver)
         choice_tokens = [
