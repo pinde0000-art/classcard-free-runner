@@ -64,7 +64,9 @@ def read_profile():
     driver = make_driver()
     try:
         login(driver)
-        driver.get("https://www.classcard.net/")
+        driver.get("https://www.classcard.net/Main")
+        if "/Login" in driver.current_url:
+            raise RuntimeError("클래스카드 로그인 세션이 유지되지 않았습니다.")
         result = driver.execute_script(NICKNAME_SCRIPT) or {}
         return str(result.get("nickname") or ""), str(result.get("avatar") or "")
     finally:

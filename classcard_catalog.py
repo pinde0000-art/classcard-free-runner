@@ -83,9 +83,11 @@ def discover_catalog():
     driver = make_driver()
     try:
         login(driver)
-        # HTTP 로그인 경로는 인증 쿠키만 Chrome에 설치한다. 로그인 직후의
-        # 빈 탭에서 클래스 목록을 기다리지 말고 인증된 홈을 먼저 연다.
-        driver.get("https://www.classcard.net/")
+        # HTTP 로그인 경로는 인증 쿠키만 Chrome에 설치한다. 클래스 목록은
+        # 공개 첫 화면(/)이 아니라 로그인 후 대시보드(/Main)에 표시된다.
+        driver.get("https://www.classcard.net/Main")
+        if "/Login" in driver.current_url:
+            raise RuntimeError("클래스카드 로그인 세션이 유지되지 않았습니다.")
         try:
             classes = WebDriverWait(driver, 20).until(
                 lambda current: read_class_links(current) or False
