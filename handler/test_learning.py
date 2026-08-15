@@ -581,7 +581,18 @@ def _find_click_confirm(driver, expected, expected_start):
         return True
 
     WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
-    native_pointer_click(driver, found["choice"])
+
+    # 먼저 일반 JS 클릭을 쓴다. 같은 스크램블 위젯을 다루는 다른 핸들러
+    # (rote/recall/spelling)는 모두 이 방식으로 안정적으로 동작한다. 원래 이
+    # 파일만 CDP 마우스 이벤트를 쓴 이유는 "JS 클릭이 간헐적으로 무시된다"는
+    # 것이었는데, 지금은 placed count(ground truth)로 반영 여부를 확인하고
+    # 재시도하므로 무시되더라도 안전하게 복구된다. 반대로 CDP 클릭은 한 줄의
+    # 마지막 단어를 누른 직후 브라우저 세션 전체가 응답하지 않는 정지를
+    # 일으켰다(31859761923에서 150초 상한으로 확인).
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center'});", found["choice"]
+    )
+    driver.execute_script("arguments[0].click();", found["choice"])
     try:
         WebDriverWait(driver, 1.5, poll_frequency=0.02).until(
             lambda d: (active_scramble_placed_count(d) or 0) > expected_start
@@ -803,7 +814,12 @@ def wait_for_next_question(driver, number):
         for element in candidates:
             try:
                 if element.is_displayed() and element.is_enabled():
-                    native_pointer_click(driver, element)
+                    # 문항 전환 직후도 세션이 멈추기 쉬운 지점이라, 여기서도
+                    # CDP 마우스 이벤트 대신 JS 클릭을 쓴다.
+                    driver.execute_script(
+                        "arguments[0].scrollIntoView({block: 'center'});", element
+                    )
+                    driver.execute_script("arguments[0].click();", element)
                     time.sleep(0.12)
                     break
             except StaleElementReferenceException:
