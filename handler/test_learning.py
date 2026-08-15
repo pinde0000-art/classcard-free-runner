@@ -627,6 +627,10 @@ def solve_sentence_scramble(driver, answer):
     tracked_position = -1
     # 같은 위치에서 제출을 두 번 이상 시도하지 않기 위한 표시(성급한 제출 방지).
     line_submit_tried_at = -1
+    # 조각 목록이 아직 갱신되지 않은 과도기에는 원문과 안 맞을 수 있어
+    # 몇 번은 기다렸다가 다시 읽는다.
+    segment_retries = 0
+    SEGMENT_RETRY_LIMIT = 10
 
     while True:
         # 한 줄의 마지막 단어를 놓은 직후 네이티브 다이얼로그가 떠서 렌더러가
@@ -698,10 +702,19 @@ def solve_sentence_scramble(driver, answer):
                 segment = raw_tokens[start:end]
                 break
         if segment is None:
+            # 방금 놓은 조각이 목록에서 사라지기 전에 읽으면(사이트가 제거
+            # 애니메이션을 끝내기 전) placed count는 이미 늘었는데 조각 목록엔
+            # 그 단어가 남아 있어, 원문의 잘못된 위치와 맞추려다 실패한다.
+            # 과도기 상태이므로 잠깐 기다렸다가 다시 읽는다.
+            segment_retries += 1
+            if segment_retries <= SEGMENT_RETRY_LIMIT:
+                time.sleep(0.2)
+                continue
             raise RuntimeError(
                 "문장 배열 조각을 원문과 맞추지 못했습니다. "
                 f"현재 조각: {choice_texts}, 남은 원문: {raw_tokens[expected_start:]}"
             )
+        segment_retries = 0
 
         if just_revealed:
             time.sleep(0.35)
