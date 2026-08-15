@@ -8,8 +8,10 @@
   --accent:#12a06a;--accent-ink:#0c7c51;--accent-soft:#e8f6f0;
   --danger:#c0392f;--danger-soft:#fdecea;
   --ease:cubic-bezier(.22,.61,.36,1);
+  --spring:cubic-bezier(.34,1.32,.44,1);
 }
 html,body{margin:0}
+html.sheet-open,html.sheet-open body{overflow:hidden;overscroll-behavior:none}
 body{
   background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;
@@ -25,84 +27,87 @@ h1{font-size:20px;line-height:1.3;letter-spacing:-.01em;margin:0;font-weight:700
 .head{display:flex;flex-direction:column;gap:6px}
 .status{font-size:13px;line-height:1.45;color:var(--muted);margin:0;word-break:keep-all}
 .status.error{color:var(--danger)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
-.panel{
-  background:var(--surface);border:1px solid var(--line);border-radius:8px;
-  padding:16px;display:flex;flex-direction:column;gap:16px;
-}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:16px}
 .field{display:flex;flex-direction:column;gap:8px;min-width:0}
 .lbl{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--muted);margin:0}
 
-select,input[type=number]{
-  width:100%;max-width:100%;min-width:0;height:46px;padding:0 12px;
-  border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);
-  color:var(--ink);font-size:16px;font-family:inherit;
-  text-overflow:ellipsis;-webkit-appearance:none;appearance:none;
+.picker{
+  display:flex;align-items:center;gap:12px;width:100%;height:56px;padding:0 12px;
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;
+  font:inherit;color:var(--ink);text-align:left;cursor:pointer;
+  transition:border-color .18s var(--ease),background .18s var(--ease);
+  -webkit-tap-highlight-color:transparent;
 }
-select{
-  padding-right:36px;
-  background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7581' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 12px center;background-size:18px;
+.picker:active{background:#f7f9fa}
+.picker:disabled{background:#f5f7f8;color:#9aa4ae;cursor:default;border-color:var(--line)}
+.picker:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.picker-badge{
+  width:34px;height:34px;flex:none;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;overflow:hidden;
 }
-select:disabled,input:disabled{background:#f5f7f8;color:#9aa4ae;border-color:var(--line)}
-select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.picker:disabled .picker-badge{background:#eef1f4;color:#9aa4ae}
+.picker-badge svg{width:18px;height:18px}
+.picker-body{flex:1;min-width:0}
+.picker-value{display:block;font-size:15px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.picker-meta{flex:none;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 
 .range{display:grid;grid-template-columns:1fr 20px 1fr;align-items:center;gap:8px}
 .dash{text-align:center;color:var(--muted);font-size:14px}
-
-.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:#eef1f4;border-radius:8px;padding:4px}
-.seg input{position:absolute;opacity:0;pointer-events:none}
-.seg label{
-  min-height:44px;display:flex;align-items:center;justify-content:center;
-  border-radius:6px;font-size:14px;font-weight:600;color:var(--ink-2);
-  background:transparent;border:1px solid transparent;cursor:pointer;
-  transition:background .18s var(--ease),color .18s var(--ease),border-color .18s var(--ease);
-  -webkit-tap-highlight-color:transparent;user-select:none;white-space:nowrap;
+input[type=number]{
+  width:100%;max-width:100%;min-width:0;height:46px;padding:0 12px;
+  border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);
+  color:var(--ink);font-size:16px;font-family:inherit;-webkit-appearance:none;appearance:none;
 }
-.seg input:checked+label{background:var(--surface);border-color:var(--accent);color:var(--accent-ink);box-shadow:0 1px 2px rgba(16,32,48,.06)}
-.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:1px}
+input[type=number]:disabled{background:#f5f7f8;color:#9aa4ae;border-color:var(--line)}
+input[type=number]:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+
+.seg{position:relative;display:grid;grid-template-columns:repeat(4,1fr);background:#eef1f4;border-radius:8px;padding:4px}
+.seg-ind{
+  position:absolute;z-index:0;top:4px;left:4px;height:calc(100% - 8px);width:calc((100% - 8px)/4);
+  border-radius:6px;background:var(--surface);border:1px solid var(--accent);
+  box-shadow:0 1px 2px rgba(16,32,48,.07);transform:translateX(0);
+  transition:transform 500ms var(--spring);will-change:transform;
+}
+.seg-ind::after{content:'';position:absolute;inset:-4px;border-radius:9px;pointer-events:none;opacity:0;background:radial-gradient(circle,rgba(18,160,106,.34) 0%,rgba(18,160,106,0) 70%)}
+.seg-ind.flash::after{animation:segFlash 600ms var(--ease) 1}
+@keyframes segFlash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+.seg input{position:absolute;width:1px;height:1px;opacity:0;margin:0}
+.seg label{
+  position:relative;z-index:1;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  border-radius:6px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;
+  transition:color 320ms var(--ease);-webkit-tap-highlight-color:transparent;user-select:none;white-space:nowrap;
+}
+.seg label svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:color 320ms var(--ease)}
+.seg input:checked+label{color:var(--accent-ink)}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
+.seg.plain label{flex-direction:row;font-size:14px}
 
 #run{
   width:100%;min-height:52px;margin:0;border:0;border-radius:8px;
   background:var(--ink);color:#fff;font-size:16px;font-weight:700;font-family:inherit;
   display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
-  transition:background .18s var(--ease),opacity .18s var(--ease);
-  -webkit-tap-highlight-color:transparent;
+  transition:background .18s var(--ease);-webkit-tap-highlight-color:transparent;
 }
-#run:disabled{background:#c3cad1;color:#fff;cursor:default}
+#run:disabled{background:#c3cad1;cursor:default}
 #run .ico{width:18px;height:18px;flex:none;display:block}
-#run:disabled .ico{opacity:.85}
 
 .progress{display:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px 16px}
 .progress.show{display:block}
 .prow{display:flex;align-items:center;justify-content:space-between;gap:12px;height:30px}
-.chip{
-  display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;
-  font-size:12px;font-weight:600;letter-spacing:.01em;white-space:nowrap;
-  background:#eef1f4;color:var(--ink-2);
-  transition:background .2s var(--ease),color .2s var(--ease);
-}
+.chip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;background:#eef1f4;color:var(--ink-2);transition:background .2s var(--ease),color .2s var(--ease)}
 .chip[data-state="preparing"]{background:#e9eff2;color:#41616e}
 .chip[data-state="running"]{background:var(--accent-soft);color:var(--accent-ink)}
 .chip[data-state="completed"]{background:var(--accent);color:#fff}
 .chip[data-state="failed"]{background:var(--danger-soft);color:var(--danger)}
-.count{
-  font-size:22px;line-height:28px;height:28px;min-width:92px;text-align:right;
-  font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;
-  display:inline-block;transform-origin:100% 50%;
-}
+.count{font-size:22px;line-height:28px;height:28px;min-width:92px;text-align:right;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;display:inline-block;transform-origin:100% 50%}
 .count.bump{animation:countBump 640ms var(--ease)}
 @keyframes countBump{0%{transform:scale(1)}22%{transform:scale(1.12)}100%{transform:scale(1)}}
-
 .track{position:relative;height:8px;margin-top:12px;background:#e7ebee;border-radius:4px}
-.fill{
-  position:absolute;inset:0;transform-origin:0 50%;transform:scaleX(0);
-  background:var(--accent);border-radius:4px;will-change:transform;
-  transition:transform 720ms var(--ease),background-color .25s var(--ease);
-}
+.fill{position:absolute;inset:0;transform-origin:0 50%;transform:scaleX(0);background:var(--accent);border-radius:4px;will-change:transform;transition:transform 720ms var(--ease)}
 .glow{
-  position:absolute;left:-14px;right:-14px;top:-20px;bottom:-20px;border-radius:8px;
-  pointer-events:none;opacity:0;
+  position:absolute;left:-14px;right:-14px;top:-20px;bottom:-20px;border-radius:8px;pointer-events:none;opacity:0;
   background:
     radial-gradient(58% 120% at 50% 50%,rgba(18,160,106,.34) 0%,rgba(18,160,106,.16) 52%,rgba(18,160,106,0) 82%),
     linear-gradient(90deg,rgba(18,160,106,0) 0%,rgba(18,160,106,.26) 22%,rgba(18,160,106,.34) 50%,rgba(18,160,106,.26) 78%,rgba(18,160,106,0) 100%);
@@ -111,16 +116,47 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .glow.pulse{animation:glowOnce 700ms var(--ease) 1}
 @keyframes glowOnce{0%{opacity:0}28%{opacity:1}100%{opacity:0}}
 
+.sheet[hidden]{display:none}
+.sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(16,24,32,0);backdrop-filter:blur(0);-webkit-backdrop-filter:blur(0);transition:background 380ms var(--ease),backdrop-filter 380ms var(--ease),-webkit-backdrop-filter 380ms var(--ease)}
+.sheet.open .sheet-backdrop{background:rgba(16,24,32,.32);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.sheet-panel{
+  position:relative;width:100%;max-width:620px;background:var(--surface);border-radius:8px 8px 0 0;
+  display:flex;flex-direction:column;max-height:min(78dvh,640px);
+  transform:translateY(100%);transition:transform 380ms var(--ease);will-change:transform;
+  padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -1px 0 rgba(16,32,48,.06);
+}
+.sheet.open .sheet-panel{transform:translateY(0)}
+.sheet.closing .sheet-panel,.sheet.closing .sheet-backdrop{transition-duration:280ms}
+.sheet-handle{width:36px;height:4px;border-radius:2px;background:#d7dde2;margin:10px auto 6px;flex:none}
+.sheet-search-wrap{padding:6px 16px 10px;flex:none}
+.sheet-search-wrap[hidden]{display:none}
+#sheet-search{width:100%;height:44px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--ink);font-size:16px;font-family:inherit;-webkit-appearance:none;appearance:none}
+#sheet-search:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.sheet-list{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:8px}
+.row{
+  display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:11px 16px;
+  background:none;border:0;border-left:2px solid transparent;text-align:left;font:inherit;color:var(--ink);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:background .14s var(--ease);
+}
+.row+.row{box-shadow:inset 0 1px 0 var(--line)}
+.row:active{background:#f2f4f6}
+.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.row.is-selected{border-left-color:var(--accent)}
+.row.is-selected .row-name{color:var(--accent-ink)}
+.row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.row-name{font-size:15px;font-weight:500;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.row-sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.row-check{width:18px;height:18px;flex:none;color:var(--accent);opacity:0;transform:scale(.7);transition:opacity 240ms var(--ease),transform 240ms var(--spring)}
+.row.is-selected .row-check{opacity:1;transform:scale(1)}
+.sheet-empty{padding:22px 16px;color:var(--muted);font-size:14px;text-align:center}
+
 @media (prefers-reduced-motion:reduce){
-  .fill{transition:none}
-  .glow,.glow.pulse{animation:none;opacity:0}
-  .count.bump{animation:none}
-  .seg label,#run,.chip{transition:none}
+  .fill,.seg-ind,.sheet-panel,.sheet-backdrop,.row-check,.chip,.seg label,#run,.picker,.row{transition:none!important}
+  .glow,.glow.pulse,.count.bump,.seg-ind.flash::after{animation:none!important}
+  .glow{opacity:0}
 }
-@media (min-width:700px){
-  main{padding-top:36px;gap:16px}
-  h1{font-size:22px}
-}
+@media (min-width:700px){main{padding-top:36px;gap:16px}h1{font-size:22px}}
 </style></head><body><main>
 <header class="head">
 <h1>Classcard 자동화</h1>
@@ -128,18 +164,62 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 </header>
 
 <section class="panel">
-<div class="field"><label class="lbl" for="class">클래스</label><select id="class" disabled></select></div>
-<div class="field"><label class="lbl" for="set">세트</label><select id="set" disabled></select></div>
+<div class="field">
+<span class="lbl" id="lbl-class">클래스</span>
+<select id="class" class="sr-only" tabindex="-1" aria-hidden="true" disabled></select>
+<button type="button" class="picker" id="class-picker" aria-labelledby="lbl-class class-value" disabled>
+<span class="picker-badge" id="class-badge">–</span>
+<span class="picker-body"><span class="picker-value" id="class-value">클래스</span></span>
+<span class="picker-meta" id="class-meta"></span>
+</button>
+</div>
+
+<div class="field">
+<span class="lbl" id="lbl-set">세트</span>
+<select id="set" class="sr-only" tabindex="-1" aria-hidden="true" disabled></select>
+<button type="button" class="picker" id="set-picker" aria-labelledby="lbl-set set-value" disabled>
+<span class="picker-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg></span>
+<span class="picker-body"><span class="picker-value" id="set-value">세트</span></span>
+<span class="picker-meta" id="set-meta"></span>
+</button>
+</div>
+
 <div class="field"><span class="lbl">카드 범위</span><div class="range"><input id="start" type="number" min="1" value="1" inputmode="numeric"><span class="dash">~</span><input id="end" type="number" min="1" value="24" inputmode="numeric"></div></div>
-<div class="field"><span class="lbl">학습 종류</span><div class="seg"><input id="m1" name="mode" type="radio" value="1" checked><label for="m1">암기</label><input id="m2" name="mode" type="radio" value="2"><label for="m2">리콜</label><input id="m3" name="mode" type="radio" value="3"><label for="m3">스펠</label><input id="m4" name="mode" type="radio" value="4"><label for="m4">테스트</label></div></div>
-<div class="field"><span class="lbl">목표</span><div class="seg four"><input id="a1" name="amount" type="radio" value="1" checked><label for="a1">100%</label><input id="a2" name="amount" type="radio" value="2"><label for="a2">200%</label><input id="a3" name="amount" type="radio" value="3"><label for="a3">300%</label><input id="a4" name="amount" type="radio" value="4"><label for="a4">400%</label></div></div>
-<button id="run" disabled><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4.5v15l12-7.5-12-7.5z" fill="currentColor" stroke="none"/></svg><span id="run-label">실행</span></button>
+
+<div class="field"><span class="lbl">학습 종류</span>
+<div class="seg" id="mode-seg" role="radiogroup" aria-label="학습 종류">
+<span class="seg-ind" id="mode-ind" aria-hidden="true"></span>
+<input id="m1" name="mode" type="radio" value="1" checked><label for="m1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>암기</label>
+<input id="m2" name="mode" type="radio" value="2"><label for="m2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M20.5 12A8.5 8.5 0 0 1 6 18"/><path d="M18 3v3.5h-3.5"/><path d="M6 21v-3.5h3.5"/></svg>리콜</label>
+<input id="m3" name="mode" type="radio" value="3"><label for="m3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 18 5.5-12h3L19 18"/><path d="M7.5 13.5h9"/></svg>스펠</label>
+<input id="m4" name="mode" type="radio" value="4"><label for="m4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v12A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 17.5 6H16"/><path d="m9 13.5 2 2 4-4"/></svg>테스트</label>
+</div></div>
+
+<div class="field"><span class="lbl">목표</span>
+<div class="seg plain" id="amount-seg" role="radiogroup" aria-label="목표">
+<span class="seg-ind" id="amount-ind" aria-hidden="true"></span>
+<input id="a1" name="amount" type="radio" value="1" checked><label for="a1">100%</label>
+<input id="a2" name="amount" type="radio" value="2"><label for="a2">200%</label>
+<input id="a3" name="amount" type="radio" value="3"><label for="a3">300%</label>
+<input id="a4" name="amount" type="radio" value="4"><label for="a4">400%</label>
+</div></div>
+
+<button id="run" disabled><svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4.5v15l12-7.5-12-7.5z" fill="currentColor"/></svg><span id="run-label">실행</span></button>
 </section>
 
 <section id="progress" class="progress">
 <div class="prow"><span id="progress-state" class="chip" data-state="idle">대기 중</span><strong id="progress-count" class="count">0/0</strong></div>
 <div class="track"><div id="progress-bar" class="fill"></div><div id="progress-glow" class="glow"></div></div>
 </section>
+</main>
+
+<div class="sheet" id="sheet" hidden>
+<div class="sheet-backdrop" data-close></div>
+<div class="sheet-panel" role="dialog" aria-modal="true" aria-label="선택">
+<div class="sheet-handle"></div>
+<div class="sheet-search-wrap" id="sheet-search-wrap" hidden><input id="sheet-search" type="search" autocomplete="off" enterkeyhint="search"></div>
+<div class="sheet-list" id="sheet-list"></div>
+</div></div>
 <script>
 const API_URL='https://classcard-free-runner.pinde0000.workers.dev/run',KEY_NAME='classcard_runner_key';
 const hashKey=new URLSearchParams(location.hash.slice(1)).get('key');
@@ -156,8 +236,88 @@ function replay(element,className,duration){element.classList.remove(className);
 function highlightStep(){replay(PROGRESS_GLOW,'pulse',760);replay(PROGRESS_COUNT,'bump',700)}
 function renderProgress(done,total,state){PROGRESS.classList.add('show');PROGRESS_COUNT.textContent=`${done}/${total}`;PROGRESS_STATE.textContent=STATE_LABEL[state]||'대기 중';PROGRESS_STATE.dataset.state=STATE_LABEL[state]?state:'idle';PROGRESS_BAR.style.transform=`scaleX(${total?Math.min(1,done/total):0})`}
 async function showProgress(progress,state){const parts=progress.split('/').map(Number),done=parts[0]||0,total=parts[1]||0;if(total!==shownTotal||done<shownDone){shownDone=0;shownTotal=total}if(!shownTotal)shownTotal=total;const stepped=done>shownDone;const finished=state==='completed'&&shownState!=='completed';shownDone=done;shownState=state;renderProgress(done,total,state);if(stepped||finished)highlightStep()}
-function resetRunner(){shownDone=0;shownTotal=0;shownState='';PROGRESS.classList.remove('show');PROGRESS_GLOW.classList.remove('pulse');PROGRESS_COUNT.classList.remove('bump');PROGRESS_COUNT.textContent='0/0';PROGRESS_STATE.textContent='대기 중';PROGRESS_STATE.dataset.state='idle';PROGRESS_BAR.style.transform='scaleX(0)';document.querySelector('#m1').checked=true;document.querySelector('#a1').checked=true;range();RUN.disabled=false;RUN_LABEL.textContent='실행';const setCount=classes.reduce((sum,c)=>sum+c.sets.length,0);STATUS.textContent=`클래스 ${classes.length}개 · 세트 ${setCount}개 자동 불러오기 완료`;STATUS.classList.remove('error')}
+function resetRunner(){shownDone=0;shownTotal=0;shownState='';PROGRESS.classList.remove('show');PROGRESS_GLOW.classList.remove('pulse');PROGRESS_COUNT.classList.remove('bump');PROGRESS_COUNT.textContent='0/0';PROGRESS_STATE.textContent='대기 중';PROGRESS_STATE.dataset.state='idle';PROGRESS_BAR.style.transform='scaleX(0)';document.querySelector('#m1').checked=true;document.querySelector('#a1').checked=true;range();syncSegments(false);refreshPickers();RUN.disabled=false;RUN_LABEL.textContent='실행';const setCount=classes.reduce((sum,c)=>sum+c.sets.length,0);STATUS.textContent=`클래스 ${classes.length}개 · 세트 ${setCount}개 자동 불러오기 완료`;STATUS.classList.remove('error')}
 async function watchProgress(id,total,initialIssue=0){let issue=initialIssue;for(let attempts=0;attempts<3600;attempts++){await wait(1000);try{const issuePart=issue?`&issue=${issue}`:'';const response=await fetch(`${API_URL.replace('/run','/status')}?id=${id}${issuePart}`,{headers:{Authorization:`Bearer ${runnerKey}`},cache:'no-store'});const data=await response.json();if(response.ok){if(data.issue)issue=data.issue;await showProgress(data.progress==='0/0'?`0/${total}`:data.progress,data.state);if(data.state==='completed'){STATUS.textContent='모두 완료되었습니다.';await wait(4000);resetRunner();return}if(data.state==='failed'){STATUS.textContent='실행이 중단되어 초기화합니다.';STATUS.classList.add('error');await wait(2500);resetRunner();return}}}catch(error){}}STATUS.textContent='진행 상황 확인 시간이 초과되어 초기화합니다.';STATUS.classList.add('error');await wait(2500);resetRunner()}
-async function loadCatalog(){try{const response=await fetch(`./catalog.json?v=${Date.now()}`,{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json();classes=data.classes||[];if(!classes.length)throw new Error('저장된 클래스가 없습니다.');C.innerHTML='';classes.forEach((c,i)=>C.add(new Option(c.name,i)));C.disabled=false;S.disabled=false;RUN.disabled=!runnerKey;sync();const setCount=classes.reduce((sum,c)=>sum+c.sets.length,0);STATUS.textContent=runnerKey?`클래스 ${classes.length}개 · 세트 ${setCount}개 자동 불러오기 완료`:'이 기기의 실행 설정이 필요합니다.';STATUS.classList.toggle('error',!runnerKey)}catch(error){STATUS.textContent=`목록을 불러오지 못했습니다: ${error.message}`;STATUS.classList.add('error')}}loadCatalog();
+async function loadCatalog(){try{const response=await fetch(`./catalog.json?v=${Date.now()}`,{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json();classes=data.classes||[];if(!classes.length)throw new Error('저장된 클래스가 없습니다.');C.innerHTML='';classes.forEach((c,i)=>C.add(new Option(c.name,i)));C.disabled=false;S.disabled=false;RUN.disabled=!runnerKey;sync();const setCount=classes.reduce((sum,c)=>sum+c.sets.length,0);STATUS.textContent=runnerKey?`클래스 ${classes.length}개 · 세트 ${setCount}개 자동 불러오기 완료`:'이 기기의 실행 설정이 필요합니다.';STATUS.classList.toggle('error',!runnerKey)}catch(error){STATUS.textContent=`목록을 불러오지 못했습니다: ${error.message}`;STATUS.classList.add('error')}}loadCatalog().then(refreshPickers);
 RUN.onclick=async()=>{const s=classes[C.value].sets[S.value],payload={class_id:classes[C.value].id,set_id:s.id,title:s.name,start:+START.value,end:+END.value,card_count:s.count,mode:+document.querySelector('[name=mode]:checked').value,amount:+document.querySelector('[name=amount]:checked').value};if(payload.start<1||payload.end<payload.start||payload.end>payload.card_count){STATUS.textContent='카드 범위를 확인해 주세요.';STATUS.classList.add('error');return}RUN.disabled=true;RUN_LABEL.textContent='실행 중';STATUS.textContent='학습을 빠르게 준비하고 있습니다.';STATUS.classList.remove('error');const selectedTotal=payload.end-payload.start+1;await showProgress(`0/${selectedTotal}`,'preparing');try{const response=await fetch(API_URL,{method:'POST',headers:{Authorization:`Bearer ${runnerKey}`,'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);STATUS.textContent=data.message||'학습을 시작했습니다.';await showProgress(`0/${selectedTotal}`,'preparing');watchProgress(data.id,selectedTotal,data.issue||0)}catch(error){STATUS.textContent=`학습 실행에 실패했습니다: ${error.message}`;STATUS.classList.add('error');RUN.disabled=false;RUN_LABEL.textContent='실행'}};
-</script></main></body></html>
+
+/* ---- 선택 UI (기존 select 값과 양방향 동기화, 로직은 그대로 사용) ---- */
+const MODE_IND=document.querySelector('#mode-ind'),AMOUNT_IND=document.querySelector('#amount-ind');
+function slide(indicator,index,flash){indicator.style.transform=`translateX(${index*100}%)`;if(flash)replay(indicator,'flash',660)}
+function syncSegments(flash){const modes=[...document.querySelectorAll('[name=mode]')],amounts=[...document.querySelectorAll('[name=amount]')];const m=modes.findIndex(i=>i.checked),a=amounts.findIndex(i=>i.checked);if(m>=0)slide(MODE_IND,m,flash);if(a>=0)slide(AMOUNT_IND,a,flash)}
+document.querySelectorAll('[name=mode],[name=amount]').forEach(input=>input.addEventListener('change',()=>syncSegments(true)));
+
+const CLASS_PICKER=document.querySelector('#class-picker'),SET_PICKER=document.querySelector('#set-picker');
+const CLASS_VALUE=document.querySelector('#class-value'),CLASS_META=document.querySelector('#class-meta'),CLASS_BADGE=document.querySelector('#class-badge');
+const SET_VALUE=document.querySelector('#set-value'),SET_META=document.querySelector('#set-meta');
+const SHEET=document.querySelector('#sheet'),SHEET_LIST=document.querySelector('#sheet-list'),SHEET_SEARCH=document.querySelector('#sheet-search'),SHEET_SEARCH_WRAP=document.querySelector('#sheet-search-wrap');
+let sheetKind='',sheetTimer=0,sheetOpener=null;
+function currentSets(){const c=classes[C.value];return c?c.sets:[]}
+function refreshPickers(){
+  const c=classes[C.value];
+  CLASS_PICKER.disabled=C.disabled||!classes.length;
+  CLASS_VALUE.textContent=c?c.name:'클래스';
+  CLASS_BADGE.textContent=c&&c.name.trim()?c.name.trim()[0]:'–';
+  CLASS_META.textContent=c?`세트 ${c.sets.length}`:'';
+  const s=c?c.sets[S.value]:null;
+  SET_PICKER.disabled=S.disabled||!c;
+  SET_VALUE.textContent=s?s.name:'세트';
+  SET_META.textContent=s&&s.count?`${s.count}장`:'';
+}
+new MutationObserver(refreshPickers).observe(S,{childList:true});
+function sheetRows(){
+  return sheetKind==='class'
+    ?classes.map((c,i)=>({index:i,name:c.name,sub:`세트 ${c.sets.length}개`}))
+    :currentSets().map((s,i)=>({index:i,name:s.name,sub:s.count?`${s.count}장`:''}));
+}
+function renderSheet(query){
+  const selected=sheetKind==='class'?+C.value:+S.value;
+  const q=query.trim().toLowerCase();
+  const rows=sheetRows().filter(r=>!q||r.name.toLowerCase().includes(q));
+  SHEET_LIST.textContent='';
+  if(!rows.length){const empty=document.createElement('p');empty.className='sheet-empty';empty.textContent='결과 없음';SHEET_LIST.append(empty);return}
+  const check='<svg class="row-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>';
+  for(const row of rows){
+    const button=document.createElement('button');
+    button.type='button';button.className='row'+(row.index===selected?' is-selected':'');
+    button.dataset.index=row.index;
+    button.setAttribute('role','option');button.setAttribute('aria-selected',row.index===selected);
+    button.innerHTML=`<span class="row-main"><span class="row-name"></span><span class="row-sub"></span></span>${check}`;
+    button.querySelector('.row-name').textContent=row.name;
+    button.querySelector('.row-sub').textContent=row.sub;
+    button.addEventListener('click',()=>pick(row.index));
+    SHEET_LIST.append(button);
+  }
+}
+function pick(index){
+  const target=sheetKind==='class'?C:S;
+  if(+target.value!==index){target.value=String(index);target.dispatchEvent(new Event('change',{bubbles:true}))}
+  [...SHEET_LIST.querySelectorAll('.row')].forEach(el=>{const on=+el.dataset.index===index;el.classList.toggle('is-selected',on);el.setAttribute('aria-selected',on)});
+  refreshPickers();
+  setTimeout(closeSheet,150);
+}
+function openSheet(kind,opener){
+  if(!classes.length)return;
+  sheetKind=kind;sheetOpener=opener;
+  clearTimeout(sheetTimer);
+  SHEET.classList.remove('closing');
+  SHEET_SEARCH.value='';
+  SHEET_SEARCH_WRAP.hidden=sheetRows().length<8;
+  renderSheet('');
+  SHEET.hidden=false;
+  document.documentElement.classList.add('sheet-open');
+  requestAnimationFrame(()=>{SHEET.classList.add('open');const active=SHEET_LIST.querySelector('.row.is-selected');if(active)active.scrollIntoView({block:'center'})});
+}
+function closeSheet(){
+  if(SHEET.hidden)return;
+  SHEET.classList.add('closing');SHEET.classList.remove('open');
+  clearTimeout(sheetTimer);
+  sheetTimer=setTimeout(()=>{SHEET.hidden=true;SHEET.classList.remove('closing');document.documentElement.classList.remove('sheet-open');if(sheetOpener)sheetOpener.focus()},290);
+}
+CLASS_PICKER.addEventListener('click',()=>openSheet('class',CLASS_PICKER));
+SET_PICKER.addEventListener('click',()=>openSheet('set',SET_PICKER));
+SHEET.addEventListener('click',event=>{if(event.target.hasAttribute('data-close'))closeSheet()});
+SHEET_SEARCH.addEventListener('input',()=>renderSheet(SHEET_SEARCH.value));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!SHEET.hidden)closeSheet()});
+syncSegments(false);refreshPickers();
+</script></body></html>
