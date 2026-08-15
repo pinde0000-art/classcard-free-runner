@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.remote_connection import RemoteConnection
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -22,6 +23,14 @@ CATALOG_CACHE = DATA_DIR / "classcard_catalog_cache.json"
 
 
 def make_driver():
+    # Selenium의 기본 원격 연결에는 클라이언트 쪽 타임아웃이 없다(소켓 기본값
+    # 그대로면 무한 대기). 브라우저 탭이나 chromedriver가 내부적으로 멈추면
+    # execute_script/execute_cdp_cmd 같은 단일 명령이 응답을 영영 못 받고
+    # 블로킹돼, 우리 쪽 WebDriverWait 타임아웃/재시도 로직이 전혀 소용없어진다
+    # (실제로 GitHub Actions에서 2시간 워크플로 제한에 걸릴 때까지 조용히
+    # 멈춘 사례가 있었다). 정상적인 단일 명령이 30초 넘게 걸릴 이유가 없으므로
+    # 명령 단위 타임아웃을 걸어, 멈추면 예외로 드러나게 한다.
+    RemoteConnection.set_timeout(30)
     options = Options()
     options.page_load_strategy = "eager"
     options.add_argument("--headless=new")
