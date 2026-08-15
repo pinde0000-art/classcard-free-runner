@@ -649,8 +649,10 @@ def solve_sentence_scramble(driver, answer):
     segment_retries = 0
     SEGMENT_RETRY_LIMIT = 10
     # 실제 단어 조각이 하나도 안 보이는 상태로 계속 도는 것을 막는 상한.
+    # 다음 줄 조각이 나타나기를 먼저 충분히 기다린 뒤에만 제출을 시도한다.
     empty_pool_waits = 0
-    EMPTY_POOL_WAIT_LIMIT = 40
+    EMPTY_POOL_SUBMIT_AFTER = 20   # 약 3초
+    EMPTY_POOL_WAIT_LIMIT = 60     # 약 9초
 
     while True:
         # 한 줄의 마지막 단어를 놓은 직후 네이티브 다이얼로그가 떠서 렌더러가
@@ -708,11 +710,18 @@ def solve_sentence_scramble(driver, answer):
             if normalize_sentence_token(text)
         ]
         if not choice_tokens:
-            # 실제 단어 조각이 하나도 없고 장식용 '—'만 남았다. 이번 줄에서
-            # 단어를 하나라도 놓았다면, 이건 과도기가 아니라 "이 줄을 다 채웠고
-            # 제출해야 하는" 상태다(그냥 기다리면 조각이 영영 안 나타나서
-            # 무한 루프가 된다 - 31860633831에서 150초 상한에 걸린 원인).
-            if expected_start > line_start:
+            # 실제 단어 조각이 없고 장식용 '—'만 남은 상태.
+            # 대부분은 다음 줄 조각이 나타나는 중인 과도기다(1번 문제처럼 줄이
+            # 바뀌어도 제출 없이 자동으로 이어지는 경우가 많다). 그래서 먼저
+            # 충분히 기다려 보고, 그래도 안 나타날 때만 "이 줄은 제출이
+            # 필요하다"고 판단한다. 클릭 직후 0.5초 만에 제출해 버리면 다음 줄
+            # 조각이 뜨기 전에 문제를 망가뜨린다(31860883706).
+            empty_pool_waits += 1
+            if (
+                empty_pool_waits >= EMPTY_POOL_SUBMIT_AFTER
+                and expected_start > line_start
+                and line_submit_tried_at != expected_start
+            ):
                 submit = next(
                     (
                         element
@@ -728,15 +737,13 @@ def solve_sentence_scramble(driver, answer):
                         f"[scramble] 줄 완료 - 제출 (placed={expected_start})",
                         flush=True,
                     )
+                    line_submit_tried_at = expected_start
                     driver.execute_script("arguments[0].click();", submit)
                     line_start = expected_start
                     just_revealed = True
                     empty_pool_waits = 0
                     time.sleep(0.3)
                     continue
-            # 아직 아무것도 못 놓았거나 제출 버튼이 없으면 잠깐 기다렸다가
-            # 다시 읽는다. 다만 무한정 돌지 않도록 상한을 둔다.
-            empty_pool_waits += 1
             if empty_pool_waits > EMPTY_POOL_WAIT_LIMIT:
                 raise RuntimeError(
                     "문장 배열 조각이 나타나지 않습니다. "
