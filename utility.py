@@ -410,7 +410,9 @@ def get_account() -> dict:
         if env_id and env_password:
             account = {"name": env_id, "id": env_id, "pw": env_password}
             config = {"accounts": [account], "selected": 0}
-            save_account_config(config)
+            # 계정 모드(일회용 인출)에서는 디스크에 자격 증명을 남기지 않는다.
+            if os.environ.get("CLASSCARD_EPHEMERAL") != "1":
+                save_account_config(config)
             return account
         if os.environ.get("CLASSCARD_NONINTERACTIVE") == "1":
             raise RuntimeError("저장된 클래스카드 계정이 없습니다.")

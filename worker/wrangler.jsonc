@@ -7,12 +7,12 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
-  // 계정 저장소. id는 Cloudflare에서 KV 네임스페이스를 만든 뒤 채워 넣는다.
-  // 채우기 전에는 계정 기능이 500으로 막히고, 평문으로 우회하지 않는다.
+  // 계정 저장소(classcard-accounts). 암호화 키는 여기 두지 않고
+  // ACCOUNT_KEY Worker Secret에서만 읽는다.
   "kv_namespaces": [
     {
       "binding": "ACCOUNTS",
-      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+      "id": "e07b8cc5960d4a27815491172a01f16e"
     }
   ]
 }

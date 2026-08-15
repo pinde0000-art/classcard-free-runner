@@ -101,12 +101,17 @@ async function verifyClasscardLogin(loginId, loginPassword) {
   if ((result || {}).result !== "ok") throw new Error("아이디 또는 비밀번호가 올바르지 않습니다.");
 }
 
-/** 계정 프로필과 카탈로그는 검증된 Selenium 워크플로가 채운다. 여기서는 실행만 요청한다. */
+/**
+ * 계정 프로필과 카탈로그는 검증된 Selenium 워크플로가 채운다. 여기서는 실행만 요청한다.
+ * 자격 증명은 넘기지 않고, 실행 때와 똑같이 일회용 인출권만 발급한다.
+ */
 async function dispatchCatalogJob(env, accountId) {
+  const syncId = crypto.randomUUID();
+  await accounts.issueRunGrant(env, accountId, syncId);
   const response = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/catalog.yml/dispatches`, {
     method: "POST",
     headers: githubHeaders(env),
-    body: JSON.stringify({ ref: "main", inputs: { account_id: accountId } }),
+    body: JSON.stringify({ ref: "main", inputs: { account_id: accountId, sync_id: syncId } }),
   });
   if (!response.ok) {
     console.error(JSON.stringify({ event: "catalog_dispatch_failed", status: response.status }));
