@@ -6,5 +6,13 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
-  }
+  },
+  // 계정 저장소. id는 Cloudflare에서 KV 네임스페이스를 만든 뒤 채워 넣는다.
+  // 채우기 전에는 계정 기능이 500으로 막히고, 평문으로 우회하지 않는다.
+  "kv_namespaces": [
+    {
+      "binding": "ACCOUNTS",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ]
 }
