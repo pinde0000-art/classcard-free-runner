@@ -667,6 +667,9 @@ def solve_sentence_scramble(driver, answer):
     empty_pool_waits = 0
     EMPTY_POOL_SUBMIT_AFTER = 20   # 약 3초
     EMPTY_POOL_WAIT_LIMIT = 60     # 약 9초
+    # 글자 없는 조각('—')도 눌러야 하는 경우를 위한 상한.
+    decorative_clicks = 0
+    DECORATIVE_CLICK_LIMIT = 4
 
     while True:
         # 한 줄의 마지막 단어를 놓은 직후 네이티브 다이얼로그가 떠서 렌더러가
@@ -718,18 +721,51 @@ def solve_sentence_scramble(driver, answer):
                 f"문장 배열 조각 목록을 읽는 중 브라우저 응답이 멈췄습니다"
                 f"(watchdog {error})."
             ) from error
+        except TimeoutException:
+            # 조각이 하나도 남지 않았다. 이 문항에서 눌러야 할 것을 다 눌러
+            # 문항이 끝난 상태이므로(다음 문항 전환은 바깥 루프가 처리한다)
+            # 여기서 정상 종료한다.
+            if expected_start > 0:
+                print(
+                    f"[scramble] 조각이 모두 소진되어 문항을 마칩니다 "
+                    f"(placed={expected_start})",
+                    flush=True,
+                )
+                return
+            raise
         choice_tokens = [
             normalize_sentence_token(text)
             for text in choice_texts
             if normalize_sentence_token(text)
         ]
         if not choice_tokens:
-            # 실제 단어 조각이 없고 장식용 '—'만 남은 상태.
-            # 대부분은 다음 줄 조각이 나타나는 중인 과도기다(1번 문제처럼 줄이
-            # 바뀌어도 제출 없이 자동으로 이어지는 경우가 많다). 그래서 먼저
-            # 충분히 기다려 보고, 그래도 안 나타날 때만 "이 줄은 제출이
-            # 필요하다"고 판단한다. 클릭 직후 0.5초 만에 제출해 버리면 다음 줄
-            # 조각이 뜨기 전에 문제를 망가뜨린다(31860883706).
+            # 글자 없는 조각('—')만 남은 상태. 31861168882의 DOM 덤프에서
+            # 확인된 사실: 이 '—'는 장식이 아니라 아직 안 눌린 실제 선택지다
+            # (나머지 단어 조각은 모두 'clicked correct'인데 '—'만 안 눌림).
+            # 이 문제의 정답 표시는 카드 원문 전체가 아니라 앞부분까지이고,
+            # 생략된 뒷부분을 '—' 조각이 대신한다. 그래서 남은 '—'도 눌러야
+            # 문항이 완성된다.
+            if choice_texts and decorative_clicks < DECORATIVE_CLICK_LIMIT:
+                remaining = scramble_choices(driver)
+                if remaining:
+                    decorative_clicks += 1
+                    print(
+                        f"[scramble] 글자 없는 조각 클릭: {choice_texts}",
+                        flush=True,
+                    )
+                    try:
+                        driver.execute_script(
+                            "arguments[0].scrollIntoView({block: 'center'});",
+                            remaining[0],
+                        )
+                        ActionChains(driver).move_to_element(
+                            remaining[0]
+                        ).click().perform()
+                    except (StaleElementReferenceException, TimeoutException):
+                        pass
+                    time.sleep(0.25)
+                    continue
+
             empty_pool_waits += 1
             if (
                 empty_pool_waits >= EMPTY_POOL_SUBMIT_AFTER
