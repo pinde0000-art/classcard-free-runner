@@ -1,5 +1,6 @@
 import html
 import re
+import threading
 import time
 from collections import Counter
 
@@ -37,6 +38,36 @@ START_SELECTORS = [
     (By.XPATH, "//*[self::a or self::button][normalize-space(.)='테스트 시작']"),
     (By.XPATH, "//*[self::a or self::button][normalize-space(.)='새로 시작']"),
 ]
+
+
+class WatchdogTimeout(Exception):
+    pass
+
+
+def call_with_watchdog(func, timeout, *args, **kwargs):
+    # Selenium 명령이 브라우저/CDP 쪽에서 멈추면 클라이언트 쪽 HTTP 타임아웃을
+    # 걸어도 안 잡히는 경우가 있었다(31858703753 등 - 30초 타임아웃을 설정한
+    # 뒤에도 동일한 지점에서 계속 멈춤). 전송 방식과 무관하게 동작하도록,
+    # 별도 데몬 스레드에서 호출하고 join(timeout)으로 기다린다. 스레드가 실제로
+    # 안 끝나도 데몬이라 메인 프로세스 종료를 막지 않는다.
+    box = {}
+
+    def target():
+        try:
+            box["value"] = func(*args, **kwargs)
+        except BaseException as error:  # noqa: BLE001 - 호출자에게 그대로 재발생
+            box["error"] = error
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        raise WatchdogTimeout(
+            f"{getattr(func, '__name__', func)} 호출이 {timeout}초 안에 끝나지 않았습니다."
+        )
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 
 def norm_text(value):
@@ -427,6 +458,15 @@ def debug_scramble_state(driver):
     )
 
 
+def safe_debug_scramble_state(driver):
+    # 이미 브라우저가 멈춘 상태일 수 있으므로, 진단 정보를 모으는 호출 자체도
+    # watchdog으로 감싼다 - 그렇지 않으면 에러를 내려다가 또 멈출 수 있다.
+    try:
+        return call_with_watchdog(debug_scramble_state, 5, driver)
+    except WatchdogTimeout:
+        return "(디버그 상태 조회도 멈춰서 가져오지 못함)"
+
+
 def sentence_question(driver, records):
     text = norm_text(driver.execute_script("return document.body.innerText || '';"))
     matches = [
@@ -497,6 +537,31 @@ def native_pointer_click(driver, element):
                 "clickCount": 1,
             },
         )
+
+
+def _find_click_confirm(driver, expected, expected_start):
+    # solve_sentence_scramble에서 watchdog으로 감싸 호출하는 "조각 찾기 +
+    # 클릭 + 반영 확인"의 본체. 이 함수 자체는 원래 코드와 동일하게 동작하되,
+    # 그 어떤 하위 호출이 멈춰도 call_with_watchdog가 상한 시간 안에 제어권을
+    # 돌려줄 수 있도록 별도 스레드에서 실행 가능한 형태로 분리했다.
+    found = {}
+
+    def locate(d, expected=expected, found=found):
+        match = find_scramble_choice(d, expected)
+        if match is None:
+            return False
+        found["choice"] = match
+        return True
+
+    WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
+    native_pointer_click(driver, found["choice"])
+    try:
+        WebDriverWait(driver, 1.5, poll_frequency=0.02).until(
+            lambda d: (active_scramble_placed_count(d) or 0) > expected_start
+        )
+        return True
+    except TimeoutException:
+        return False
 
 
 def solve_sentence_scramble(driver, answer):
@@ -591,47 +656,41 @@ def solve_sentence_scramble(driver, answer):
             f"choices={choice_texts}",
             flush=True,
         )
-        found = {}
-
-        def locate(d, expected=expected, found=found):
-            match = find_scramble_choice(d, expected)
-            if match is None:
-                return False
-            found["choice"] = match
-            return True
 
         try:
-            WebDriverWait(driver, 3, poll_frequency=0.02).until(locate)
+            registered = call_with_watchdog(
+                _find_click_confirm, 10, driver, expected, expected_start
+            )
+        except WatchdogTimeout as error:
+            # 클라이언트 쪽 HTTP 타임아웃을 걸어도 브라우저/CDP 쪽에서 멈추면
+            # 안 잡히는 경우가 있었다(31858703753). 여기서는 전송 방식과
+            # 무관하게 별도 스레드 join(10초)으로 강제 상한을 둔다.
+            raise RuntimeError(
+                f"문장 조각 {expected_token!r} 처리 중 브라우저 응답이 멈췄습니다"
+                f"(watchdog {error})."
+            ) from error
         except TimeoutException as error:
-            debug_state = debug_scramble_state(driver)
+            debug_state = safe_debug_scramble_state(driver)
             raise RuntimeError(
                 f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
                 f"남은 원문: {raw_tokens[expected_start:]}, 현재 선택지: {choice_texts}, "
                 f"디버그: {debug_state}"
             ) from error
-
-        try:
-            native_pointer_click(driver, found["choice"])
         except StaleElementReferenceException:
             # 클릭 직전에 조각 DOM이 다시 그려졌다. word_attempts를 늘리지
             # 않고 다음 바깥 루프 반복에서 ground truth를 다시 읽는다.
             continue
 
-        try:
-            WebDriverWait(driver, 1.5, poll_frequency=0.02).until(
-                lambda d: (active_scramble_placed_count(d) or 0) > expected_start
-            )
+        if registered:
             # 클릭이 실제로 반영됐다 - 다음 단어로 진행한다.
             word_attempts = 0
             time.sleep(0.08)
             continue
-        except TimeoutException:
-            pass
 
         # 이번 클릭은 반영되지 않았다.
         word_attempts += 1
         if word_attempts >= STALL_LIMIT:
-            debug_state = debug_scramble_state(driver)
+            debug_state = safe_debug_scramble_state(driver)
             raise RuntimeError(
                 f"문장 배열 {expected_start}번째 단어({expected_token!r})에서 "
                 f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
