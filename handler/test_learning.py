@@ -185,15 +185,39 @@ def blank_fill_answer(question, example):
 
     example_tokens = norm_text(example).split()
     lowered = [token.casefold() for token in example_tokens]
-    if len(lowered) < len(prefix) + len(suffix) + 1:
-        return ""
-    if lowered[: len(prefix)] != prefix:
-        return ""
-    if suffix and lowered[len(lowered) - len(suffix):] != suffix:
-        return ""
+    total = len(lowered)
 
-    end = len(lowered) - len(suffix) if suffix else len(lowered)
-    return " ".join(example_tokens[len(prefix):end]).strip(" .,!?;:")
+    # 예문 뒤에 한국어 해석이 함께 붙어 있는 경우가 있어(예: 'I got a perfect
+    # score on my test. 나는 시험에서 만점을 받았다.') 앞뒤가 예문의 처음/끝과
+    # 정확히 맞는다고 볼 수 없다. 앞부분이 나오는 위치를 찾고, 그 뒤에서
+    # 뒷부분이 처음 나오는 위치를 찾아 그 사이를 정답으로 본다.
+    starts = []
+    if prefix:
+        for index in range(0, total - len(prefix) + 1):
+            if lowered[index:index + len(prefix)] == prefix:
+                starts.append(index)
+    else:
+        starts = [0]
+
+    for start in starts:
+        answer_start = start + len(prefix)
+        if suffix:
+            for end in range(answer_start + 1, total - len(suffix) + 1):
+                if lowered[end:end + len(suffix)] == suffix:
+                    answer = " ".join(example_tokens[answer_start:end])
+                    answer = answer.strip(" .,!?;:")
+                    if answer and len(answer.split()) <= 4:
+                        return answer
+        else:
+            # 빈칸이 문장 끝이면 문장 부호가 나오는 데까지를 정답으로 본다.
+            for end in range(answer_start, total):
+                if re.search(r"[.!?]$", example_tokens[end]):
+                    answer = " ".join(example_tokens[answer_start:end + 1])
+                    answer = answer.strip(" .,!?;:")
+                    if answer and len(answer.split()) <= 4:
+                        return answer
+                    break
+    return ""
 
 
 def blank_stripped(value):
