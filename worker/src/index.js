@@ -275,10 +275,8 @@ export default {
     if (!BROWSER_ROUTES.includes(url.pathname)) return json(origin, { ok: false, error: "Not found" }, 404);
     if (origin !== ALLOWED_ORIGIN) return json(origin, { ok: false, error: "허용되지 않은 사이트입니다." }, 403);
 
-    const authorization = request.headers.get("Authorization") || "";
-    const suppliedKey = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-    if (!suppliedKey || !await secureEqual(suppliedKey, env.RUNNER_KEY)) return json(origin, { ok: false, error: "실행 인증이 필요합니다." }, 401);
-
+    // 휴대폰은 서버 공용 키를 보관하지 않는다. 계정 경로는 각 기기에
+    // 발급한 account_token으로 accountRoute 안에서 인증한다.
     if (url.pathname.startsWith("/account/")) return accountRoute(request, env, url, origin);
 
     if (request.method === "GET" && url.pathname === "/status") {
@@ -325,6 +323,12 @@ export default {
         return json(origin, { ok: false, error: error.message }, 401);
       }
       if (runAccount.status !== "ready") return json(origin, { ok: false, error: "계정 정보를 아직 불러오는 중입니다." }, 409);
+    } else {
+      const authorization = request.headers.get("Authorization") || "";
+      const suppliedKey = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+      if (!suppliedKey || !await secureEqual(suppliedKey, env.RUNNER_KEY)) {
+        return json(origin, { ok: false, error: "실행 인증이 필요합니다." }, 401);
+      }
     }
 
     let inputs;

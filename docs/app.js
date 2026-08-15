@@ -4,18 +4,18 @@
    기기에는 비밀번호를 저장하지 않는다. account_token만 보관한다. */
 const API_BASE = 'https://classcard-free-runner.pinde0000.workers.dev';
 const API_URL = `${API_BASE}/run`;
-const KEY_NAME = 'classcard_runner_key';
 const ACCOUNTS_KEY = 'clj_accounts_v1';
 const LAST_KEY = 'clj_last_account';
 const catalogKey = (id) => `clj_catalog_${id}`;
 
-const hashKey = new URLSearchParams(location.hash.slice(1)).get('key');
-const queryKey = new URLSearchParams(location.search).get('key');
-const setupKey = hashKey || queryKey || '';
-let savedKey = '';
-try { if (setupKey) localStorage.setItem(KEY_NAME, setupKey); savedKey = localStorage.getItem(KEY_NAME) || ''; } catch (error) {}
-if (hashKey) history.replaceState(null, '', location.pathname + location.search);
-const runnerKey = setupKey || savedKey;
+// 이전 버전의 공용 실행키는 더 이상 휴대폰에 보관하지 않는다.
+try { localStorage.removeItem('classcard_runner_key'); } catch (error) {}
+if (location.hash || new URLSearchParams(location.search).has('key')) {
+  const cleanUrl = new URL(location.href);
+  cleanUrl.hash = '';
+  cleanUrl.searchParams.delete('key');
+  history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+}
 
 let classes = [];
 let accounts = [];
@@ -42,7 +42,7 @@ function dropCatalog(id) { try { localStorage.removeItem(catalogKey(id)); } catc
 async function api(path, body) {
   const response = await fetch(API_BASE + path, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${runnerKey}`, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body), cache: 'no-store',
   });
   const data = await response.json().catch(() => ({}));
@@ -378,7 +378,7 @@ async function watchProgress(id, total, initialIssue = 0) {
     await wait(1000);
     try {
       const issuePart = issue ? `&issue=${issue}` : '';
-      const response = await fetch(`${API_BASE}/status?id=${id}${issuePart}`, { headers: { Authorization: `Bearer ${runnerKey}` }, cache: 'no-store' });
+      const response = await fetch(`${API_BASE}/status?id=${id}${issuePart}`, { cache: 'no-store' });
       const data = await response.json();
       if (response.ok) {
         if (data.issue) issue = data.issue;
@@ -410,7 +410,7 @@ RUN.onclick = async () => {
   await showProgress(`0/${selectedTotal}`, 'preparing');
   try {
     const response = await fetch(API_URL, {
-      method: 'POST', headers: { Authorization: `Bearer ${runnerKey}`, 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data = await response.json().catch(() => ({}));
@@ -469,7 +469,7 @@ function applyCatalog(list) {
   C.disabled = !classes.length; S.disabled = !classes.length;
   if (classes.length) sync(); else { S.innerHTML = ''; range(); }
   refreshPickers();
-  RUN.disabled = !classes.length || !runnerKey || isRunning;
+  RUN.disabled = !classes.length || isRunning;
 }
 async function loadAccountCatalog(account, { background = false } = {}) {
   const cached = readCatalog(account.account_id);
@@ -536,9 +536,8 @@ $('account-continue').addEventListener('click', async () => {
   try { selectedAccountId = localStorage.getItem(LAST_KEY) || ''; } catch (error) {}
   if (!accounts.some((one) => one.account_id === selectedAccountId)) selectedAccountId = accounts.length ? accounts[0].account_id : '';
   renderAccounts();
-  if (!runnerKey) { ACCOUNT_STATUS.textContent = '이 기기의 실행 설정이 필요합니다.'; ACCOUNT_STATUS.classList.add('error'); }
-  else if (!accounts.length) ACCOUNT_STATUS.textContent = '계정을 추가해 주세요.';
+  if (!accounts.length) ACCOUNT_STATUS.textContent = '계정을 추가해 주세요.';
   else { ACCOUNT_STATUS.textContent = `계정 ${accounts.length}개`; ACCOUNT_STATUS.classList.remove('error'); }
-  $('account-add').disabled = !runnerKey;
+  $('account-add').disabled = false;
   pollSyncing();
 })();

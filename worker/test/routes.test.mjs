@@ -45,12 +45,13 @@ const worker = (await import('../src/index.js')).default;
 const KEY_B64 = Buffer.from(webcrypto.getRandomValues(new Uint8Array(32))).toString('base64');
 const baseEnv = () => ({ RUNNER_KEY, GITHUB_TOKEN: 'gh-token', ACCOUNT_KEY: KEY_B64, ACCOUNTS: makeKV() });
 
-const post = (path, body, { key = RUNNER_KEY, origin = ORIGIN } = {}) =>
-  new Request(`https://worker.example${path}`, {
-    method: 'POST',
-    headers: { Origin: origin, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+const post = (path, body, { key = RUNNER_KEY, origin = ORIGIN } = {}) => {
+  const headers = { Origin: origin, 'Content-Type': 'application/json' };
+  if (key) headers.Authorization = `Bearer ${key}`;
+  return new Request(`https://worker.example${path}`, {
+    method: 'POST', headers, body: JSON.stringify(body),
   });
+};
 
 const RUN_PAYLOAD = { class_id: '2059431', set_id: '10513878', title: 'T', start: 1, end: 11, card_count: 11, mode: 4, amount: 1 };
 
@@ -93,6 +94,14 @@ await test('잘못된 RUNNER_KEY는 여전히 막힌다', async () => {
 });
 
 console.log('계정 연결');
+await test('휴대폰은 RUNNER_KEY 없이 계정을 연결할 수 있다', async () => {
+  const env = baseEnv();
+  const response = await worker.fetch(post('/account/link', {
+    login_id: 'phone@example.com', login_pwd: 'right-password',
+  }, { key: null }), env);
+  assert.equal(response.status, 201);
+  assert.ok((await response.json()).account_token);
+});
 await test('로그인 실패 시 계정이 만들어지지 않는다', async () => {
   const env = baseEnv();
   const response = await worker.fetch(post('/account/link', { login_id: 'user@example.com', login_pwd: 'wrong-password' }), env);
@@ -168,13 +177,23 @@ await test('다른 계정의 토큰으로는 접근할 수 없다', async () => 
 await test('계정 실행은 자격 증명 대신 account_id만 입력으로 넘긴다', async () => {
   const env = baseEnv();
   const a = await link(env, 'a@example.com');
-  const response = await worker.fetch(post('/run', { ...RUN_PAYLOAD, account_id: a.id, account_token: a.token }), env);
+  const response = await worker.fetch(post('/run', {
+    ...RUN_PAYLOAD, account_id: a.id, account_token: a.token,
+  }, { key: null }), env);
   assert.equal(response.status, 202);
   const dispatch = calls.find((c) => c.url.includes('/run.yml/dispatches'));
   const body = dispatch.options.body;
   assert.ok(body.includes(a.id), 'account_id가 입력에 없음');
   assert.ok(!body.includes('right-password'), '입력에 비밀번호가 들어감');
   assert.ok(!body.includes('a@example.com'), '입력에 아이디가 들어감');
+});
+await test('휴대폰 계정 토큰으로 목록을 읽을 때 RUNNER_KEY가 필요 없다', async () => {
+  const env = baseEnv();
+  const a = await link(env, 'phone@example.com');
+  const response = await worker.fetch(post('/account/catalog', {
+    account_id: a.id, account_token: a.token,
+  }, { key: null }), env);
+  assert.equal(response.status, 200);
 });
 await test('러너는 request_id로 자격 증명을 한 번만 인출한다', async () => {
   const env = baseEnv();
