@@ -123,10 +123,15 @@ def build_records(word_d):
             "back": back,
             "back_full": back,
             "examples": [],
+            # 예문 원문(줄 단위). 빈칸 문제를 문맥으로 맞출 때 쓴다.
+            "example_lines": [],
         }
         if isinstance(detail, dict):
             record["back_full"] = norm_text(detail.get("back")) or back
             example = str(detail.get("example") or "")
+            record["example_lines"] = [
+                norm_text(line) for line in example.splitlines() if norm_text(line)
+            ]
             for line in example.splitlines():
                 match = re.search(r"\{([^{}]+)\}", line)
                 if not match:
@@ -158,6 +163,37 @@ def meaning_senses(value):
         if sense:
             senses.add(sense)
     return senses
+
+
+def blank_fill_answer(question, example):
+    # 빈칸 문제와 카드 예문을 단어 단위로 맞춰 보고, 빈칸 자리에 들어갈 말을
+    # 예문에서 그대로 가져온다. 카드 앞면 단어를 쓰면 시제/변화형이 달라
+    # 틀리므로(예: 앞면 'admire', 예문 'admired') 예문의 실제 형태를 쓴다.
+    # .ex_example은 innerText로 읽혀 강조 표시가 사라지기 때문에 예문에는
+    # 정답 표시가 남아 있지 않다. 그래서 앞뒤 문맥이 일치하는지로 찾는다.
+    question_tokens = norm_text(question).split()
+    blanks = [
+        index
+        for index, token in enumerate(question_tokens)
+        if re.fullmatch(r"[_–—]{2,}[.,!?;:]?", token)
+    ]
+    if len(blanks) != 1:
+        return ""
+    blank_at = blanks[0]
+    prefix = [token.casefold() for token in question_tokens[:blank_at]]
+    suffix = [token.casefold() for token in question_tokens[blank_at + 1:]]
+
+    example_tokens = norm_text(example).split()
+    lowered = [token.casefold() for token in example_tokens]
+    if len(lowered) < len(prefix) + len(suffix) + 1:
+        return ""
+    if lowered[: len(prefix)] != prefix:
+        return ""
+    if suffix and lowered[len(lowered) - len(suffix):] != suffix:
+        return ""
+
+    end = len(lowered) - len(suffix) if suffix else len(lowered)
+    return " ".join(example_tokens[len(prefix):end]).strip(" .,!?;:")
 
 
 def blank_stripped(value):
@@ -208,6 +244,17 @@ def answer_candidates(question, records):
                         blank_matches.append(answer)
         if len(blank_matches) == 1:
             return [blank_matches[0]]
+
+        # 예문에 정답 표시({...})가 없으면 위 목록이 비어 있다. 이때는 예문과
+        # 문제를 단어 단위로 맞춰 빈칸에 들어갈 말을 예문에서 찾아낸다.
+        filled = []
+        for record in records:
+            for line in record["example_lines"]:
+                answer = blank_fill_answer(question, line)
+                if answer and answer not in filled:
+                    filled.append(answer)
+        if len(filled) == 1:
+            return [filled[0]]
 
     for record in records:
         if comparable_text(record["front"]) == question_key:
