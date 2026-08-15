@@ -160,6 +160,23 @@ def meaning_senses(value):
     return senses
 
 
+def senses_overlap(question_senses, card_senses):
+    # 문제의 뜻과 카드의 뜻이 완전히 같지 않아도, 한쪽이 다른 쪽에 포함되면
+    # 같은 뜻으로 본다(예: 문제 '쌍둥이' vs 카드 '쌍둥이 중의 한 명').
+    # 너무 짧은 조각으로 우연히 겹치는 것을 막기 위해 2글자 이상만 본다.
+    for question_sense in question_senses:
+        if len(question_sense) < 2:
+            continue
+        for card_sense in card_senses:
+            if len(card_sense) < 2:
+                continue
+            if question_sense == card_sense:
+                return True
+            if question_sense in card_sense or card_sense in question_sense:
+                return True
+    return False
+
+
 def answer_candidates(question, records):
     question = clean_question(question)
     question_key = comparable_text(question)
@@ -191,7 +208,7 @@ def answer_candidates(question, records):
             senses = meaning_senses(record["back"]) | meaning_senses(
                 record["back_full"]
             )
-            if senses & question_senses and record["front"] not in partial:
+            if senses_overlap(question_senses, senses) and record["front"] not in partial:
                 partial.append(record["front"])
         if len(partial) == 1:
             return [partial[0]]
