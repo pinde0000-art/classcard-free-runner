@@ -525,6 +525,24 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
 /* .acct 는 폴링마다 다시 그려지므로 등장 애니메이션을 주지 않는다.
    목록 컨테이너가 화면 스태거에 포함되어 이미 부드럽게 들어온다. */
 
+/* ---------- 19. 마스코트 (첫 화면 하단) ----------
+   장식이라 aria-hidden이며 스크립트가 참조하지 않는다.
+   아우라는 은은하게: 콘텐츠를 이기지 않을 정도의 밝기만 준다. */
+.mascot{position:relative;display:flex;align-items:center;justify-content:center;
+  margin-top:2px;padding:16px 0 4px}
+.mascot-aura{
+  position:absolute;z-index:0;width:104%;max-width:400px;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle,rgba(110,139,255,.26) 0%,rgba(126,110,242,.14) 38%,rgba(110,139,255,0) 70%);
+  filter:blur(28px);will-change:transform,opacity;
+  animation:auraBreathe 6.5s var(--ease) infinite}
+.mascot img{
+  position:relative;z-index:1;display:block;width:min(280px,66%);height:auto;
+  filter:drop-shadow(0 0 13px rgba(110,139,255,.40)) drop-shadow(0 14px 26px rgba(4,7,16,.72));
+  animation:mascotFloat 7s var(--ease) infinite}
+@keyframes auraBreathe{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+@keyframes mascotFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media (min-width:700px){.mascot img{width:min(320px,58%)}}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
     transition-duration:.001ms!important;scroll-behavior:auto!important}
