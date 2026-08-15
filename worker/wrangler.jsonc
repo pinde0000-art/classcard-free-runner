@@ -6,5 +6,13 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
-  }
+  },
+  // 계정 저장소(classcard-accounts). 암호화 키는 여기 두지 않고
+  // ACCOUNT_KEY Worker Secret에서만 읽는다.
+  "kv_namespaces": [
+    {
+      "binding": "ACCOUNTS",
+      "id": "e07b8cc5960d4a27815491172a01f16e"
+    }
+  ]
 }

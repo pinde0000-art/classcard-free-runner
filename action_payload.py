@@ -28,6 +28,13 @@ def load_payload():
 
 
 payload = load_payload()
+
+# 계정 모드에서는 GitHub Secrets 대신 Worker에서 일회용으로 자격 증명을 받는다.
+# 계정 식별자가 없으면 기존 단일 계정 방식을 그대로 쓴다.
+_account_id = os.environ.get("INPUT_ACCOUNT_ID", "").strip()
+if _account_id:
+    from runner_account import load_credentials
+    load_credentials(os.environ.get("INPUT_REQUEST_ID", ""))
 encoded = base64.urlsafe_b64encode(
     json.dumps(payload, ensure_ascii=False).encode("utf-8")
 ).decode("ascii")

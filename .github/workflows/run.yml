@@ -13,6 +13,7 @@ on:
       amount: {description: "1=100%, 2=200%, 3=300%, 4=400%", required: true, default: "1"}
       request_id: {description: "진행 상황 번호", required: false, default: ""}
       issue_number: {description: "진행 기록 번호", required: false, default: ""}
+      account_id: {description: "계정 식별자(계정 모드)", required: false, default: ""}
 permissions:
   contents: read
   issues: write
@@ -42,6 +43,9 @@ jobs:
       INPUT_REQUEST_ID: ${{ inputs.request_id }}
       PYTHONUTF8: "1"
       PYTHONUNBUFFERED: "1"
+      WORKER_URL: ${{ vars.WORKER_URL }}
+      RUNNER_KEY: ${{ secrets.RUNNER_KEY }}
+      INPUT_ACCOUNT_ID: ${{ inputs.account_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

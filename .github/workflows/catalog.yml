@@ -2,6 +2,9 @@ name: 클래스·세트 목록 갱신
 
 on:
   workflow_dispatch:
+    inputs:
+      account_id: {description: "계정 식별자(계정 모드)", required: false, default: ""}
+      sync_id: {description: "일회용 인출권", required: false, default: ""}
   schedule:
     - cron: "17 * * * *"
 
@@ -9,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: classcard-catalog
+  group: classcard-catalog-${{ inputs.account_id || 'legacy' }}
   cancel-in-progress: true
 
 jobs:
@@ -24,6 +27,10 @@ jobs:
       CLASSCARD_DATA_DIR: /tmp/classcard
       PYTHONUTF8: "1"
       PYTHONUNBUFFERED: "1"
+      WORKER_URL: ${{ vars.WORKER_URL }}
+      RUNNER_KEY: ${{ secrets.RUNNER_KEY }}
+      INPUT_ACCOUNT_ID: ${{ inputs.account_id }}
+      INPUT_SYNC_ID: ${{ inputs.sync_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,9 +39,14 @@ jobs:
           cache: pip
       - name: 패키지 설치
         run: pip install -r requirements.txt
+      - name: 계정 프로필·목록 동기화
+        if: inputs.account_id != ''
+        run: python -u export_account_catalog.py
       - name: 클래스·세트 목록 읽기
+        if: inputs.account_id == ''
         run: python -u export_catalog.py
       - name: 변경된 목록 게시
+        if: inputs.account_id == ''
         run: |
           if git diff --quiet -- docs/catalog.json; then
             echo "목록 변경 없음"
