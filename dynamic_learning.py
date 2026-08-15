@@ -16,7 +16,7 @@ from classcard_catalog import make_driver, read_cards
 from handler.recall_learning import RecallLearning
 from handler.rote_learning import RoteLearning
 from handler.spelling_learning import SpellingLearning
-from handler.test_learning import TestLearning
+from handler.test_learning import TestLearning, call_with_watchdog
 from utility import get_account
 
 
@@ -337,18 +337,27 @@ def run(payload):
             "card_type": card_type,
         }
     finally:
+        # 실패 원인이 "브라우저 세션이 멈춤"인 경우, 정리 단계에서 같은 세션에
+        # 명령을 보내면 여기서 다시 무한정 멈춘다(그러면 오류 메시지를 남기려던
+        # 의도와 달리 워크플로 제한까지 걸린다). 정리 작업 전체에 상한을 둔다.
+        def restore_favorites():
+            driver.get(f"https://www.classcard.net/set/{set_id}/{class_id}")
+            WebDriverWait(driver, 15).until(
+                lambda d: d.find_elements(By.CSS_SELECTOR, ".flip-card[data-idx]")
+            )
+            set_favorites(driver, set_id, cards, originals)
+
         if cards:
             try:
-                driver.get(f"https://www.classcard.net/set/{set_id}/{class_id}")
-                WebDriverWait(driver, 15).until(
-                    lambda d: d.find_elements(By.CSS_SELECTOR, ".flip-card[data-idx]")
-                )
-                set_favorites(driver, set_id, cards, originals)
+                call_with_watchdog(restore_favorites, 45)
                 print("기존 중요 카드 표시를 복구했습니다.", flush=True)
             except Exception as error:
                 print(f"중요 카드 표시 복구 경고: {error}", flush=True)
-        driver.quit()
-        print("브라우저를 종료했습니다.", flush=True)
+        try:
+            call_with_watchdog(driver.quit, 30)
+            print("브라우저를 종료했습니다.", flush=True)
+        except Exception as error:
+            print(f"브라우저 종료 경고: {error}", flush=True)
 
 
 def main():

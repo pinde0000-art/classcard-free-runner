@@ -618,9 +618,13 @@ def solve_sentence_scramble(driver, answer):
 
     while True:
         # 한 줄의 마지막 단어를 놓은 직후 네이티브 다이얼로그가 떠서 렌더러가
-        # 멈추는 경우가 있어, 매 반복 시작 시 먼저 확인해 닫는다. 이 확인은
-        # 렌더러를 거치지 않아 멈춘 상태에서도 안전하다.
-        dismiss_native_dialog(driver)
+        # 멈추는 경우가 있어, 매 반복 시작 시 먼저 확인해 닫는다. 세션이 통째로
+        # 멈추면 이 조회조차 반환하지 않는 사례가 있어(31859447060) 이것도
+        # watchdog으로 감싼다.
+        try:
+            call_with_watchdog(dismiss_native_dialog, 5, driver)
+        except WatchdogTimeout:
+            pass  # 상위 watchdog이 최종적으로 처리한다.
         try:
             guarded(driver, dismiss_test_focus_warning, 8, driver)
             placed = guarded(driver, active_scramble_placed_count, 8, driver)
@@ -938,7 +942,19 @@ class TestLearning:
 
             if is_sentence_scramble:
                 selected = answers[0]
-                solve_sentence_scramble(driver, selected)
+                # 내부 어디서 멈추든 한 문항이 무한정 걸리지 않도록 최종 상한을
+                # 둔다. 브라우저 세션이 통째로 멈추면 알림창 조회 같은 호출조차
+                # 반환하지 않아, 안쪽에 개별 watchdog을 걸어도 빠져나오지 못한
+                # 사례가 있었다(31859447060 - 워크플로 2시간 제한까지 정지).
+                try:
+                    call_with_watchdog(
+                        solve_sentence_scramble, 150, driver, selected
+                    )
+                except WatchdogTimeout as error:
+                    raise RuntimeError(
+                        f"테스트 {number}번 문장 배열이 150초 안에 끝나지 않았습니다"
+                        f"({error}). 브라우저 세션이 응답하지 않는 것으로 보입니다."
+                    ) from error
             else:
                 reveal_choices(driver)
                 selected = choose_answer(driver, answers)
