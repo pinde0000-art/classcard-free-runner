@@ -133,6 +133,8 @@ function selectAccount(id) {
   try { localStorage.setItem(LAST_KEY, id); } catch (error) {}
   ACCOUNT_STATUS.classList.remove('error');
   renderAccounts();
+  // 이 계정으로 넘어갈 가능성이 높으니 목록을 미리 받아 둔다.
+  prefetchCatalog(accounts.find((one) => one.account_id === id));
 }
 
 /* 동기화 중인 계정은 준비될 때까지만 짧게 확인한다. */
@@ -156,7 +158,9 @@ async function pollSyncing() {
     }
   }
   writeAccounts(); renderAccounts();
-  if (accounts.some((account) => account.status === 'syncing')) syncTimer = setTimeout(pollSyncing, 5000);
+  // 방금 준비된 계정은 미리 목록을 받아 두면 전환이 즉시 끝난다.
+  for (const account of pending) if (statusOf(account) === 'ready') prefetchCatalog(account);
+  if (accounts.some((account) => account.status === 'syncing')) syncTimer = setTimeout(pollSyncing, 4000);
 }
 
 /* ---------------- 계정 추가 / 관리 ---------------- */
@@ -471,7 +475,38 @@ function applyCatalog(list) {
   refreshPickers();
   RUN.disabled = !classes.length || isRunning;
 }
-async function loadAccountCatalog(account, { background = false } = {}) {
+/* 계정 화면에 머무는 동안 미리 목록을 받아 둔다.
+   같은 계정에 대한 요청은 하나만 유지해 중복 호출을 막고, 실행 화면으로
+   넘어갈 때는 이미 끝난(또는 진행 중인) 요청을 그대로 이어 쓴다. */
+const catalogRequests = new Map();
+function fetchCatalog(account, { force = false } = {}) {
+  if (!account) return Promise.resolve(null);
+  const id = account.account_id;
+  if (force) catalogRequests.delete(id);
+  if (catalogRequests.has(id)) return catalogRequests.get(id);
+  const pending = api('/account/catalog', { account_id: id, account_token: account.account_token })
+    .then((data) => {
+      const fresh = (data.catalog && data.catalog.classes) || [];
+      if (fresh.length) writeCatalog(id, { classes: fresh, synced_at: data.catalog.synced_at });
+      Object.assign(account, {
+        nickname: data.account.nickname || account.nickname,
+        avatar: data.account.avatar || account.avatar,
+        status: data.account.status,
+        error: data.account.error || '',
+      });
+      writeAccounts();
+      return data;
+    })
+    .catch((error) => { catalogRequests.delete(id); throw error; });
+  catalogRequests.set(id, pending);
+  return pending;
+}
+function prefetchCatalog(account) {
+  if (!account || statusOf(account) !== 'ready') return;
+  fetchCatalog(account).catch(() => {});
+}
+
+async function loadAccountCatalog(account, { background = false, force = false } = {}) {
   const cached = readCatalog(account.account_id);
   if (cached && cached.classes && cached.classes.length) applyCatalog(cached.classes);
   else if (!background) {
@@ -479,14 +514,10 @@ async function loadAccountCatalog(account, { background = false } = {}) {
     STATUS.textContent = '목록을 불러오는 중입니다.';
   }
   try {
-    const data = await api('/account/catalog', { account_id: account.account_id, account_token: account.account_token });
+    const data = await fetchCatalog(account, { force });
     const fresh = (data.catalog && data.catalog.classes) || [];
-    if (fresh.length) {
-      writeCatalog(account.account_id, { classes: fresh, synced_at: data.catalog.synced_at });
-      applyCatalog(fresh);
-    }
-    Object.assign(account, { nickname: data.account.nickname || account.nickname, avatar: data.account.avatar || account.avatar, status: data.account.status, error: data.account.error || '' });
-    writeAccounts();
+    // 저장과 계정 정보 갱신은 fetchCatalog가 이미 처리했다. 여기서는 화면만 맞춘다.
+    if (fresh.length) applyCatalog(fresh);
     $('runner-nickname').textContent = account.nickname || '계정';
     avatarInto($('runner-avatar'), account);
     if (!fresh.length) {
@@ -502,12 +533,15 @@ $('catalog-refresh').addEventListener('click', async () => {
   STATUS.textContent = '목록을 새로 확인하고 있습니다.'; STATUS.classList.remove('error');
   try {
     await api('/account/refresh', { account_id: activeAccount.account_id, account_token: activeAccount.account_token });
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      await wait(3000);
+    // 처음엔 짧게, 점점 길게 확인해서 빨리 끝나는 경우를 놓치지 않는다.
+    let delay = 900;
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      await wait(delay);
+      delay = Math.min(3000, Math.round(delay * 1.4));
       const data = await api('/account/status', { account_id: activeAccount.account_id, account_token: activeAccount.account_token });
       if (data.account.status !== 'syncing') break;
     }
-    await loadAccountCatalog(activeAccount, { background: true });
+    await loadAccountCatalog(activeAccount, { background: true, force: true });
   } catch (error) { STATUS.textContent = error.message; STATUS.classList.add('error'); }
 });
 
@@ -540,4 +574,7 @@ $('account-continue').addEventListener('click', async () => {
   else { ACCOUNT_STATUS.textContent = `계정 ${accounts.length}개`; ACCOUNT_STATUS.classList.remove('error'); }
   $('account-add').disabled = false;
   pollSyncing();
+  // 첫 화면이 그려진 직후 백그라운드로 목록을 준비한다(입력을 막지 않는다).
+  const preselected = accounts.find((one) => one.account_id === selectedAccountId);
+  if (preselected) setTimeout(() => prefetchCatalog(preselected), 0);
 })();
