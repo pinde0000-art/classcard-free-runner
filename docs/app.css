@@ -208,12 +208,18 @@ h1{
 .acct-check{width:20px;height:20px;flex:none;color:var(--accent-ink);opacity:0;transform:scale(.6);
   transition:opacity .40s var(--ease),transform .40s var(--spring)}
 .acct.is-active .acct-check{opacity:1;transform:scale(1)}
-.acct-more{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center;
-  border:1px solid transparent;border-radius:var(--r-sm);background:transparent;color:var(--faint);
-  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .18s var(--ease),color .18s var(--ease),border-color .18s var(--ease)}
-@media (hover:hover){.acct-more:hover{background:var(--glass-flat);border-color:var(--line);color:var(--ink-2)}}
-.acct-more:active{background:var(--glass-flat-2)}
-.acct-more:focus-visible{outline:2px solid var(--accent-line);outline-offset:-2px}
+/* 점 세 개는 화면에서 가장 작은 글리프다. 실행 화면 툴바의 .icon-btn 과 같은
+   유리 배경·테두리를 줘서 누를 수 있는 것임이 바로 보이게 한다. */
+.acct-more{position:relative;width:40px;height:40px;flex:none;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--glass-flat);color:var(--ink-2);
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background .18s var(--ease),color .18s var(--ease),border-color .18s var(--ease),transform .12s var(--ease)}
+.acct-more svg{width:20px;height:20px}
+/* 보이는 크기는 40px로 두고 터치 영역만 44px로 넓힌다 */
+.acct-more::before{content:'';position:absolute;inset:-2px}
+@media (hover:hover){.acct-more:hover{background:var(--glass-flat-2);border-color:var(--line-strong);color:var(--ink)}}
+.acct-more:active{background:var(--glass-flat-2);transform:scale(.94)}
+.acct-more:focus-visible{outline:2px solid var(--accent-line);outline-offset:2px}
 
 /* ---------- 8. 빈 상태 ---------- */
 .empty{
