@@ -57,6 +57,28 @@ def clean_text(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def read_class_links(driver):
+    """현재 화면 전체에서 클래스 메인 링크를 읽는다."""
+    classes = []
+    seen = set()
+    for anchor in driver.find_elements(By.CSS_SELECTOR, "a[href]"):
+        href = anchor.get_attribute("href") or ""
+        match = re.search(r"/ClassMain/(\d+)(?:[/?#]|$)", href, re.IGNORECASE)
+        if not match:
+            continue
+        class_id = match.group(1)
+        if class_id in seen:
+            continue
+        seen.add(class_id)
+        name = clean_text(
+            anchor.get_attribute("innerText")
+            or anchor.get_attribute("textContent")
+            or anchor.text
+        )
+        classes.append({"class_id": class_id, "class_name": name or f"클래스 {class_id}"})
+    return classes
+
+
 def discover_catalog():
     driver = make_driver()
     try:
@@ -64,18 +86,14 @@ def discover_catalog():
         # HTTP 로그인 경로는 인증 쿠키만 Chrome에 설치한다. 로그인 직후의
         # 빈 탭에서 클래스 목록을 기다리지 말고 인증된 홈을 먼저 연다.
         driver.get("https://www.classcard.net/")
-        class_list = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".left-class-list"))
-        )
-        classes = []
-        seen = set()
-        for anchor in class_list.find_elements(By.TAG_NAME, "a"):
-            class_id = (anchor.get_attribute("href") or "").rstrip("/").split("/")[-1]
-            name = clean_text(anchor.text)
-            if not class_id.isdigit() or class_id in seen:
-                continue
-            seen.add(class_id)
-            classes.append({"class_id": class_id, "class_name": name or f"클래스 {class_id}"})
+        try:
+            classes = WebDriverWait(driver, 20).until(
+                lambda current: read_class_links(current) or False
+            )
+        except Exception as error:
+            raise RuntimeError(
+                f"클래스 링크를 찾지 못했습니다 (화면: {driver.current_url})."
+            ) from error
 
         cookies = {cookie["name"]: cookie["value"] for cookie in driver.get_cookies()}
         user_agent = driver.execute_script("return navigator.userAgent")
