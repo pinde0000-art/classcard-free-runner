@@ -430,65 +430,6 @@ def active_scramble_placed_count(driver):
     )
 
 
-def debug_scramble_state(driver):
-    return driver.execute_script(
-        """
-        const passesBasic = (el) => {
-          const r = el.getBoundingClientRect();
-          const s = getComputedStyle(el);
-          return r.width > 0 && r.height > 0
-            && s.display !== 'none' && s.visibility !== 'hidden'
-            && parseFloat(s.opacity || '1') > 0.05
-            && r.bottom > 0 && r.top < innerHeight
-            && r.right > 0 && r.left < innerWidth;
-        };
-        const containers = [...document.querySelectorAll(
-          '#wrapper-test .test-sentence-words'
-        )];
-        return {
-          containerCount: containers.length,
-          containers: containers.map(container => {
-            const r = container.getBoundingClientRect();
-            const all = [...container.querySelectorAll('a')];
-            const unclicked = all.filter(el => !el.classList.contains('clicked'));
-            return {
-              class: container.className,
-              rect: {x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height)},
-              passesBasic: passesBasic(container),
-              totalPieces: all.length,
-              unclickedTexts: unclicked.map(el => (el.innerText || '').trim()),
-              // 조각이 왜 걸러지는지 보려면 개별 가시성 정보가 필요하다.
-              pieces: all.map(el => {
-                const pr = el.getBoundingClientRect();
-                const ps = getComputedStyle(el);
-                return {
-                  t: (el.innerText || '').trim(),
-                  cls: el.className,
-                  w: Math.round(pr.width),
-                  h: Math.round(pr.height),
-                  disp: ps.display,
-                  vis: ps.visibility,
-                  op: ps.opacity,
-                };
-              }),
-            };
-          }),
-          inputText: [...document.querySelectorAll('.test-sentence-input')]
-            .map(el => (el.innerText || '').trim()),
-        };
-        """
-    )
-
-
-def safe_debug_scramble_state(driver):
-    # 이미 브라우저가 멈춘 상태일 수 있으므로, 진단 정보를 모으는 호출 자체도
-    # watchdog으로 감싼다 - 그렇지 않으면 에러를 내려다가 또 멈출 수 있다.
-    try:
-        return call_with_watchdog(debug_scramble_state, 5, driver)
-    except WatchdogTimeout:
-        return "(디버그 상태 조회도 멈춰서 가져오지 못함)"
-
-
 def dismiss_native_dialog(driver):
     # 네이티브 JS 다이얼로그(alert/confirm/beforeunload)가 열리면 렌더러가
     # 멈춰서 execute_script 계열 명령이 영영 반환하지 않는다. 실제로 한 줄의
@@ -496,10 +437,7 @@ def dismiss_native_dialog(driver):
     # 멈춘 사례가 있었다(31859164224 등). 알림창 조회/수락은 렌더러를 거치지
     # 않는 WebDriver 명령이라 이 상황에서도 동작한다.
     try:
-        alert = driver.switch_to.alert
-        text = alert.text
-        alert.accept()
-        print(f"[scramble] 네이티브 다이얼로그를 닫았습니다: {text!r}", flush=True)
+        driver.switch_to.alert.accept()
         return True
     except Exception:
         return False
@@ -727,11 +665,6 @@ def solve_sentence_scramble(driver, answer):
             # 문항이 끝난 상태이므로(다음 문항 전환은 바깥 루프가 처리한다)
             # 여기서 정상 종료한다.
             if expected_start > 0:
-                print(
-                    f"[scramble] 조각이 모두 소진되어 문항을 마칩니다 "
-                    f"(placed={expected_start})",
-                    flush=True,
-                )
                 return
             raise
         choice_tokens = [
@@ -750,10 +683,6 @@ def solve_sentence_scramble(driver, answer):
                 remaining = scramble_choices(driver)
                 if remaining:
                     decorative_clicks += 1
-                    print(
-                        f"[scramble] 글자 없는 조각 클릭: {choice_texts}",
-                        flush=True,
-                    )
                     try:
                         driver.execute_script(
                             "arguments[0].scrollIntoView({block: 'center'});",
@@ -784,10 +713,6 @@ def solve_sentence_scramble(driver, answer):
                     None,
                 )
                 if submit is not None:
-                    print(
-                        f"[scramble] 줄 완료 - 제출 (placed={expected_start})",
-                        flush=True,
-                    )
                     line_submit_tried_at = expected_start
                     driver.execute_script("arguments[0].click();", submit)
                     line_start = expected_start
@@ -796,11 +721,9 @@ def solve_sentence_scramble(driver, answer):
                     time.sleep(0.3)
                     continue
             if empty_pool_waits > EMPTY_POOL_WAIT_LIMIT:
-                debug_state = safe_debug_scramble_state(driver)
                 raise RuntimeError(
                     "문장 배열 조각이 나타나지 않습니다. "
-                    f"현재 조각: {choice_texts}, 놓은 개수: {expected_start}, "
-                    f"줄 시작: {line_start}, 디버그: {debug_state}"
+                    f"남은 조각: {choice_texts}, 놓은 단어 수: {expected_start}"
                 )
             time.sleep(0.15)
             continue
@@ -832,12 +755,6 @@ def solve_sentence_scramble(driver, answer):
             just_revealed = False
 
         expected_token = segment[0]
-        print(
-            f"[scramble] pos={expected_start} line_start={line_start} "
-            f"attempts={word_attempts} retries={segment_retries} "
-            f"target={expected_token!r} choices={choice_texts}",
-            flush=True,
-        )
 
         try:
             registered = guarded(
@@ -852,11 +769,9 @@ def solve_sentence_scramble(driver, answer):
                 f"(watchdog {error})."
             ) from error
         except TimeoutException as error:
-            debug_state = safe_debug_scramble_state(driver)
             raise RuntimeError(
                 f"문장 조각 {expected_token!r}을 찾지 못했습니다. "
-                f"남은 원문: {raw_tokens[expected_start:]}, 현재 선택지: {choice_texts}, "
-                f"디버그: {debug_state}"
+                f"현재 선택지: {choice_texts}"
             ) from error
         except StaleElementReferenceException:
             # 클릭 직전에 조각 DOM이 다시 그려졌다. word_attempts를 늘리지
@@ -872,10 +787,9 @@ def solve_sentence_scramble(driver, answer):
         # 이번 클릭은 반영되지 않았다.
         word_attempts += 1
         if word_attempts >= STALL_LIMIT:
-            debug_state = safe_debug_scramble_state(driver)
             raise RuntimeError(
                 f"문장 배열 {expected_start}번째 단어({expected_token!r})에서 "
-                f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다. 디버그: {debug_state}"
+                f"{STALL_LIMIT}번 클릭해도 진행되지 않았습니다."
             )
 
         # 단어 하나도 놓지 못한 상태(expected_start == line_start)에서는
