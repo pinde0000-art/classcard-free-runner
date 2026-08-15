@@ -118,11 +118,23 @@ await test('KV에 평문 아이디·비밀번호가 저장되지 않는다', asy
   assert.ok(!dump.includes('user@example.com'), 'KV에 아이디 평문 저장됨');
   assert.ok(dump.includes('"v":1') && dump.includes('"tag"'), '봉인 형식이 아님');
 });
-await test('같은 계정을 두 번 등록하면 거부한다', async () => {
+await test('같은 계정을 다른 기기에서 연결하면 기존 토큰을 유지하며 새 토큰을 발급한다', async () => {
   const env = baseEnv();
-  await worker.fetch(post('/account/link', { login_id: 'dup@example.com', login_pwd: 'right-password' }), env);
+  const first = await worker.fetch(post('/account/link', { login_id: 'dup@example.com', login_pwd: 'right-password' }), env);
   const second = await worker.fetch(post('/account/link', { login_id: 'dup@example.com', login_pwd: 'right-password' }), env);
-  assert.equal(second.status, 409);
+  assert.equal(second.status, 200);
+  const firstData = await first.json();
+  const secondData = await second.json();
+  assert.equal(secondData.account.account_id, firstData.account.account_id);
+  assert.notEqual(secondData.account_token, firstData.account_token);
+  const firstAccess = await worker.fetch(post('/account/status', {
+    account_id: firstData.account.account_id, account_token: firstData.account_token,
+  }), env);
+  const secondAccess = await worker.fetch(post('/account/status', {
+    account_id: secondData.account.account_id, account_token: secondData.account_token,
+  }), env);
+  assert.equal(firstAccess.status, 200);
+  assert.equal(secondAccess.status, 200);
 });
 await test('ACCOUNT_KEY가 없으면 평문 저장으로 넘어가지 않고 설정 오류', async () => {
   const env = { ...baseEnv(), ACCOUNT_KEY: undefined };

@@ -14,6 +14,7 @@ export const ACCOUNT_PREFIX = 'acct:';
 export const CATALOG_PREFIX = 'cat:';
 export const RUN_PREFIX = 'run:';
 export const RUN_TTL_SECONDS = 900;
+export const MAX_DEVICE_TOKENS = 10;
 
 export class ConfigError extends Error {}
 export class AuthError extends Error {}
@@ -110,6 +111,22 @@ export async function tokenMatches(token, storedHash) {
   return difference === 0;
 }
 
+/** 기존 단일 token_hash 레코드도 읽으면서 기기별 토큰 목록으로 점진 이전한다. */
+export function accountTokenHashes(account) {
+  const hashes = Array.isArray(account.token_hashes) ? account.token_hashes.filter(Boolean) : [];
+  if (account.token_hash && !hashes.includes(account.token_hash)) hashes.push(account.token_hash);
+  return hashes;
+}
+
+/** 새 기기 토큰을 추가하고 오래된 토큰은 제한 개수까지만 유지한다. */
+export async function addAccountToken(account, token) {
+  const hashes = accountTokenHashes(account);
+  hashes.push(await hashToken(token));
+  account.token_hashes = [...new Set(hashes)].slice(-MAX_DEVICE_TOKENS);
+  delete account.token_hash;
+  return account;
+}
+
 /** 로그에 남기면 안 되는 값을 가린다. */
 export function maskAccountId(accountLoginId) {
   const text = String(accountLoginId || '');
@@ -127,7 +144,8 @@ export async function readAccount(env, accountId) {
 /** 기기에 보관된 account_token으로 계정 접근 권한을 확인한다. */
 export async function authorizeAccount(env, accountId, accountToken) {
   const account = await readAccount(env, accountId);
-  if (!(await tokenMatches(accountToken, account.token_hash))) throw new AuthError('계정 접근 권한이 없습니다.');
+  const matches = await Promise.all(accountTokenHashes(account).map((storedHash) => tokenMatches(accountToken, storedHash)));
+  if (!matches.some(Boolean)) throw new AuthError('계정 접근 권한이 없습니다.');
   return account;
 }
 

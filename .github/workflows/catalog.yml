@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: classcard-catalog
+  group: classcard-catalog-${{ inputs.account_id || 'legacy' }}
   cancel-in-progress: true
 
 jobs:

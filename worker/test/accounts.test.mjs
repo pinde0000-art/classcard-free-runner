@@ -103,10 +103,24 @@ await test('토큰 해시만 저장되고 원본 토큰은 저장되지 않는�
   const stored = await env.ACCOUNTS.get(accounts.ACCOUNT_PREFIX + record.account_id);
   assert.ok(!stored.includes(token), '토큰 원본이 저장됨');
 });
+await test('여러 기기의 토큰을 허용하고 오래된 토큰은 제한 개수 뒤 폐기한다', async () => {
+  const record = { account_id: accounts.randomToken(16) };
+  const tokens = [];
+  for (let index = 0; index < accounts.MAX_DEVICE_TOKENS + 2; index += 1) {
+    const token = accounts.randomToken();
+    tokens.push(token);
+    await accounts.addAccountToken(record, token);
+  }
+  await accounts.writeAccount(env, record);
+  assert.equal(record.token_hashes.length, accounts.MAX_DEVICE_TOKENS);
+  await assert.rejects(() => accounts.authorizeAccount(env, record.account_id, tokens[0]), accounts.AuthError);
+  const newest = await accounts.authorizeAccount(env, record.account_id, tokens.at(-1));
+  assert.equal(newest.account_id, record.account_id);
+});
 await test('공개 표현에는 자격 증명과 토큰 해시가 없다', async () => {
-  const record = { account_id: 'x'.repeat(20), nickname: '홍길동', cipher: { v: 1, iv: 'i', data: 'd', tag: 't' }, token_hash: 'h', login_hash: 'l', status: 'ready' };
+  const record = { account_id: 'x'.repeat(20), nickname: '홍길동', cipher: { v: 1, iv: 'i', data: 'd', tag: 't' }, token_hashes: ['h'], login_hash: 'l', status: 'ready' };
   const view = JSON.stringify(accounts.publicAccount(record));
-  assert.ok(!view.includes('cipher') && !view.includes('token_hash') && !view.includes('login_hash'));
+  assert.ok(!view.includes('cipher') && !view.includes('token_hashes') && !view.includes('login_hash'));
   assert.ok(view.includes('홍길동'));
 });
 

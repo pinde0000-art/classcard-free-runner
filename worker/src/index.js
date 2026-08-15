@@ -138,20 +138,21 @@ async function accountRoute(request, env, url, origin) {
       }
       await verifyClasscardLogin(loginId, loginPassword);
 
-      // 같은 클래스카드 아이디를 두 번 등록하지 않도록 아이디 해시로 대조한다(평문 저장 아님).
+      // 같은 로그인은 같은 계정으로 연결하되 새 기기 전용 토큰을 추가 발급한다.
       const loginHash = await accounts.hashToken(`login:${loginId}`);
       if (!account) {
         const existing = await env.ACCOUNTS.list({ prefix: accounts.ACCOUNT_PREFIX });
         for (const entry of existing.keys) {
           const candidate = await env.ACCOUNTS.get(entry.name, "json");
           if (candidate && candidate.login_hash === loginHash) {
-            return json(origin, { ok: false, error: "이미 등록된 계정입니다." }, 409);
+            account = candidate;
+            break;
           }
         }
       }
 
       const cipher = await accounts.sealCredentials(env, { id: loginId, pw: loginPassword });
-      const accountToken = account ? null : accounts.randomToken();
+      const accountToken = url.pathname === "/account/link" ? accounts.randomToken() : null;
       const record = account || {
         account_id: accounts.randomToken(16),
         nickname: "",
@@ -164,7 +165,7 @@ async function accountRoute(request, env, url, origin) {
       record.cipher = cipher;
       record.status = "syncing";
       record.error = "";
-      if (accountToken) record.token_hash = await accounts.hashToken(accountToken);
+      if (accountToken) await accounts.addAccountToken(record, accountToken);
       await accounts.writeAccount(env, record);
 
       const dispatched = await dispatchCatalogJob(env, record.account_id);
@@ -174,7 +175,7 @@ async function accountRoute(request, env, url, origin) {
         await accounts.writeAccount(env, record);
       }
       console.log(JSON.stringify({ event: "account_linked", account_id: record.account_id, login: accounts.maskAccountId(loginId) }));
-      return json(origin, { ok: true, account: accounts.publicAccount(record), ...(accountToken ? { account_token: accountToken } : {}) }, 201);
+      return json(origin, { ok: true, account: accounts.publicAccount(record), ...(accountToken ? { account_token: accountToken } : {}) }, account ? 200 : 201);
     }
 
     const account = await accounts.authorizeAccount(env, String(body.account_id || ""), String(body.account_token || ""));
