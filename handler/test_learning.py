@@ -467,6 +467,33 @@ def safe_debug_scramble_state(driver):
         return "(디버그 상태 조회도 멈춰서 가져오지 못함)"
 
 
+def dismiss_native_dialog(driver):
+    # 네이티브 JS 다이얼로그(alert/confirm/beforeunload)가 열리면 렌더러가
+    # 멈춰서 execute_script 계열 명령이 영영 반환하지 않는다. 실제로 한 줄의
+    # 마지막 단어를 놓은 직후 이 상태로 빠져 워크플로 2시간 제한까지 조용히
+    # 멈춘 사례가 있었다(31859164224 등). 알림창 조회/수락은 렌더러를 거치지
+    # 않는 WebDriver 명령이라 이 상황에서도 동작한다.
+    try:
+        alert = driver.switch_to.alert
+        text = alert.text
+        alert.accept()
+        print(f"[scramble] 네이티브 다이얼로그를 닫았습니다: {text!r}", flush=True)
+        return True
+    except Exception:
+        return False
+
+
+def guarded(driver, func, timeout, *args, **kwargs):
+    # 렌더러를 건드리는 호출을 watchdog으로 감싼다. 멈추면 다이얼로그부터
+    # 닫아 보고, 그래도 안 되면 호출자가 판단할 수 있도록 예외를 올린다.
+    try:
+        return call_with_watchdog(func, timeout, *args, **kwargs)
+    except WatchdogTimeout:
+        if dismiss_native_dialog(driver):
+            return call_with_watchdog(func, timeout, *args, **kwargs)
+        raise
+
+
 def sentence_question(driver, records):
     text = norm_text(driver.execute_script("return document.body.innerText || '';"))
     matches = [
@@ -590,8 +617,18 @@ def solve_sentence_scramble(driver, answer):
     line_submit_tried_at = -1
 
     while True:
-        dismiss_test_focus_warning(driver)
-        placed = active_scramble_placed_count(driver)
+        # 한 줄의 마지막 단어를 놓은 직후 네이티브 다이얼로그가 떠서 렌더러가
+        # 멈추는 경우가 있어, 매 반복 시작 시 먼저 확인해 닫는다. 이 확인은
+        # 렌더러를 거치지 않아 멈춘 상태에서도 안전하다.
+        dismiss_native_dialog(driver)
+        try:
+            guarded(driver, dismiss_test_focus_warning, 8, driver)
+            placed = guarded(driver, active_scramble_placed_count, 8, driver)
+        except WatchdogTimeout as error:
+            raise RuntimeError(
+                f"문장 배열 진행 상태를 읽는 중 브라우저 응답이 멈췄습니다"
+                f"(watchdog {error})."
+            ) from error
         expected_start = placed if placed is not None else tracked_position
         if expected_start < 0:
             expected_start = 0
@@ -618,7 +655,13 @@ def solve_sentence_scramble(driver, answer):
             word_attempts = 0
         line_start = min(line_start, expected_start)
 
-        choice_texts = stable_scramble_choice_texts(driver)
+        try:
+            choice_texts = guarded(driver, stable_scramble_choice_texts, 12, driver)
+        except WatchdogTimeout as error:
+            raise RuntimeError(
+                f"문장 배열 조각 목록을 읽는 중 브라우저 응답이 멈췄습니다"
+                f"(watchdog {error})."
+            ) from error
         choice_tokens = [
             normalize_sentence_token(text)
             for text in choice_texts
@@ -658,8 +701,8 @@ def solve_sentence_scramble(driver, answer):
         )
 
         try:
-            registered = call_with_watchdog(
-                _find_click_confirm, 10, driver, expected, expected_start
+            registered = guarded(
+                driver, _find_click_confirm, 10, driver, expected, expected_start
             )
         except WatchdogTimeout as error:
             # 클라이언트 쪽 HTTP 타임아웃을 걸어도 브라우저/CDP 쪽에서 멈추면
