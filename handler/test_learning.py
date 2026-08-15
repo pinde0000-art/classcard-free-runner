@@ -415,12 +415,13 @@ def active_scramble_placed_count(driver):
         for (let i = 0; i < 8 && node; i += 1) {
           const input = node.querySelector('.test-sentence-input');
           if (input) {
-            // 빈 자식(placeholder/캐럿 등)이 섞여 있으면 아무것도 놓지 않았는데
-            // 놓은 것으로 세어, 원문 위치가 한 칸씩 밀린다. 실제 글자가 있는
-            // 자식만 센다.
-            return [...input.children].filter(
-              el => (el.innerText || el.textContent || '').trim()
-            ).length;
+            // 빈 자식(placeholder/캐럿 등)이나 글자 없는 조각('—')이 섞여
+            // 있으면 원문 위치가 밀린다. '—'도 실제로 눌러서 답란에 들어가지만
+            // 원문 단어는 아니므로, 글자나 숫자가 하나라도 있는 자식만 센다.
+            return [...input.children].filter(el => {
+              const text = (el.innerText || el.textContent || '').trim();
+              return text && /[a-zA-Z0-9]/.test(text);
+            }).length;
           }
           node = node.parentElement;
         }
