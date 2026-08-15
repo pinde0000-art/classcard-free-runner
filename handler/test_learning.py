@@ -146,6 +146,20 @@ def clean_question(value):
     return norm_text(re.sub(r"<[^>]+>", " ", value))
 
 
+def meaning_senses(value):
+    # '[명] 1. 복사(본) 2. 사본' -> {'복사(본)', '사본'}
+    # 품사 표시([명]/[동] 등)와 뜻 번호를 걷어내고 개별 뜻만 남긴다.
+    text = comparable_text(value)
+    text = re.sub(r"\[[^\]]*\]", " ", text)
+    parts = re.split(r"\d+\s*[.)]", text)
+    senses = set()
+    for part in parts:
+        sense = norm_text(part).strip(" ,;/")
+        if sense:
+            senses.add(sense)
+    return senses
+
+
 def answer_candidates(question, records):
     question = clean_question(question)
     question_key = comparable_text(question)
@@ -165,6 +179,22 @@ def answer_candidates(question, records):
             comparable_text(record["back_full"]),
         }:
             return [record["front"]]
+
+    # 테스트가 카드 뜻의 일부만 보여 주는 경우가 있다(예: 카드 뜻은
+    # '[명] 1. 복사(본) 2. 사본'인데 문제는 '[명] 복사(본)'). 품사 표시와
+    # 뜻 번호를 걷어내고 개별 뜻 단위로 비교해서 찾되, 후보가 하나로 좁혀질
+    # 때만 사용한다(여러 카드가 걸리면 잘못 고를 수 있으므로 포기).
+    question_senses = meaning_senses(question)
+    if question_senses:
+        partial = []
+        for record in records:
+            senses = meaning_senses(record["back"]) | meaning_senses(
+                record["back_full"]
+            )
+            if senses & question_senses and record["front"] not in partial:
+                partial.append(record["front"])
+        if len(partial) == 1:
+            return [partial[0]]
 
     return []
 
