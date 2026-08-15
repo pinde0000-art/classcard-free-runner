@@ -78,14 +78,31 @@ function avatarInto(element, account) {
 const CHECK_SVG = '<svg class="acct-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>';
 const MORE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg>';
 
+const EMPTY_ART = `<svg viewBox="0 0 96 96" aria-hidden="true">
+  <rect x="18" y="30" width="48" height="34" rx="6" transform="rotate(-8 42 47)" opacity=".5"/>
+  <rect x="28" y="34" width="50" height="36" rx="7"/>
+  <path d="M38 48h26M38 57h16"/>
+  <path d="m72 17 1.8 4.2 4.2 1.8-4.2 1.8L72 29l-1.8-4.2-4.2-1.8 4.2-1.8L72 17z"/></svg>`;
+const PLUS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+
+/* 비어 있어도 화면이 완성되어 보이도록. 동작은 기존 '계정 추가'와 같다. */
+function buildEmptyState() {
+  const empty = document.createElement('div');
+  empty.className = 'empty';
+  empty.innerHTML =
+    `<span class="empty-art">${EMPTY_ART}</span>` +
+    '<h2 class="empty-title">아직 연결된 계정이 없어요.</h2>' +
+    '<p class="empty-sub">클래스카드 계정을 연결하면 클래스와 세트를 바로 불러옵니다.</p>' +
+    `<button type="button" class="btn primary empty-cta">${PLUS_SVG}계정 연결하기</button>`;
+  empty.querySelector('.empty-cta').addEventListener('click', () => openAccountForm(null));
+  return empty;
+}
+
 function renderAccounts() {
   const list = $('account-list');
   list.textContent = '';
   if (!accounts.length) {
-    const empty = document.createElement('p');
-    empty.className = 'acct-empty';
-    empty.textContent = '연결된 계정이 없습니다.';
-    list.append(empty);
+    list.append(buildEmptyState());
     $('account-continue').disabled = true;
     return;
   }
@@ -343,7 +360,8 @@ document.querySelectorAll('[name=mode]').forEach((input) => input.onchange = () 
 });
 
 const PROGRESS = $('progress'), PROGRESS_STATE = $('progress-state'), PROGRESS_COUNT = $('progress-count'),
-  PROGRESS_BAR = $('progress-bar'), PROGRESS_GLOW = $('progress-glow');
+  PROGRESS_BAR = $('progress-bar'), PROGRESS_GLOW = $('progress-glow'),
+  PROGRESS_PCT = $('progress-pct').firstElementChild;
 let shownDone = 0, shownTotal = 0, shownState = '';
 const STATE_LABEL = { completed: '모두 완료', failed: '오류 발생', running: '학습 중', preparing: '학습 준비 중' };
 function replay(element, className, duration) { element.classList.remove(className); void element.offsetWidth; element.classList.add(className); setTimeout(() => element.classList.remove(className), duration); }
@@ -351,6 +369,7 @@ function highlightStep() { replay(PROGRESS_GLOW, 'pulse', 760); replay(PROGRESS_
 function renderProgress(done, total, state) {
   PROGRESS.classList.add('show');
   PROGRESS_COUNT.textContent = `${done}/${total}`;
+  PROGRESS_PCT.textContent = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
   PROGRESS_STATE.textContent = STATE_LABEL[state] || '대기 중';
   PROGRESS_STATE.dataset.state = STATE_LABEL[state] ? state : 'idle';
   PROGRESS_BAR.style.transform = `scaleX(${total ? Math.min(1, done / total) : 0})`;
@@ -368,7 +387,8 @@ async function showProgress(progress, state) {
 function resetRunner() {
   shownDone = 0; shownTotal = 0; shownState = ''; isRunning = false;
   PROGRESS.classList.remove('show'); PROGRESS_GLOW.classList.remove('pulse'); PROGRESS_COUNT.classList.remove('bump');
-  PROGRESS_COUNT.textContent = '0/0'; PROGRESS_STATE.textContent = '대기 중'; PROGRESS_STATE.dataset.state = 'idle';
+  PROGRESS_COUNT.textContent = '0/0'; PROGRESS_PCT.textContent = '0';
+  PROGRESS_STATE.textContent = '대기 중'; PROGRESS_STATE.dataset.state = 'idle';
   PROGRESS_BAR.style.transform = 'scaleX(0)';
   $('m1').checked = true; $('a1').checked = true; range(); syncSegments(false); refreshPickers();
   RUN.disabled = false; RUN_LABEL.textContent = '실행';
@@ -440,7 +460,7 @@ function syncSegments(flash) {
 }
 document.querySelectorAll('[name=mode],[name=amount]').forEach((input) => input.addEventListener('change', () => syncSegments(true)));
 
-const CLASS_PICKER = $('class-picker'), SET_PICKER = $('set-picker');
+const CLASS_PICKER = $('class-picker'), SET_PICKER = $('set-picker'), RUNNER_PANEL = $('runner-panel');
 function refreshPickers() {
   const c = classes[C.value];
   CLASS_PICKER.disabled = !classes.length;
@@ -511,6 +531,8 @@ async function loadAccountCatalog(account, { background = false, force = false }
   if (cached && cached.classes && cached.classes.length) applyCatalog(cached.classes);
   else if (!background) {
     applyCatalog([]);
+    // 실제 구조를 유지한 스켈레톤을 보여준다. 표시만 바뀌고 흐름은 그대로다.
+    RUNNER_PANEL.classList.add('is-loading');
     STATUS.textContent = '목록을 불러오는 중입니다.';
   }
   try {
@@ -526,6 +548,8 @@ async function loadAccountCatalog(account, { background = false, force = false }
     } else { STATUS.textContent = `${account.nickname || '계정'} · 클래스 ${fresh.length}개`; STATUS.classList.remove('error'); }
   } catch (error) {
     if (!classes.length) { STATUS.textContent = `목록을 불러오지 못했습니다: ${error.message}`; STATUS.classList.add('error'); }
+  } finally {
+    RUNNER_PANEL.classList.remove('is-loading');
   }
 }
 $('catalog-refresh').addEventListener('click', async () => {
@@ -564,6 +588,27 @@ $('account-continue').addEventListener('click', async () => {
   await loadAccountCatalog(account);
 });
 
+/* ---------------- 넓은 화면 레일 ----------------
+   자체 상태를 갖지 않는다. 클릭은 기존 버튼에 그대로 위임하고,
+   활성/비활성 표시는 그 버튼들의 상태를 그대로 비춘다. */
+const RAIL_ACCOUNTS = $('rail-accounts'), RAIL_RUNNER = $('rail-runner'), RAIL_REFRESH = $('rail-refresh');
+const SCREEN_RUNNER = $('screen-runner'), ACCOUNT_BACK = $('account-back'),
+  ACCOUNT_CONTINUE = $('account-continue'), CATALOG_REFRESH = $('catalog-refresh');
+RAIL_ACCOUNTS.addEventListener('click', () => { if (!SCREEN_RUNNER.hidden) ACCOUNT_BACK.click(); });
+RAIL_RUNNER.addEventListener('click', () => { if (SCREEN_RUNNER.hidden) ACCOUNT_CONTINUE.click(); });
+RAIL_REFRESH.addEventListener('click', () => CATALOG_REFRESH.click());
+function syncRail() {
+  const onRunner = !SCREEN_RUNNER.hidden;
+  RAIL_ACCOUNTS.classList.toggle('is-active', !onRunner);
+  RAIL_RUNNER.classList.toggle('is-active', onRunner);
+  RAIL_ACCOUNTS.disabled = onRunner && ACCOUNT_BACK.disabled;
+  RAIL_RUNNER.disabled = !onRunner && ACCOUNT_CONTINUE.disabled;
+  RAIL_REFRESH.disabled = !onRunner || CATALOG_REFRESH.disabled;
+}
+const railWatch = new MutationObserver(syncRail);
+[SCREEN_RUNNER, ACCOUNT_BACK, ACCOUNT_CONTINUE, CATALOG_REFRESH].forEach((element) =>
+  railWatch.observe(element, { attributes: true, attributeFilter: ['hidden', 'disabled'] }));
+
 /* ---------------- 시작 ---------------- */
 (function start() {
   accounts = readAccounts();
@@ -573,6 +618,7 @@ $('account-continue').addEventListener('click', async () => {
   if (!accounts.length) ACCOUNT_STATUS.textContent = '계정을 추가해 주세요.';
   else { ACCOUNT_STATUS.textContent = `계정 ${accounts.length}개`; ACCOUNT_STATUS.classList.remove('error'); }
   $('account-add').disabled = false;
+  syncRail();
   pollSyncing();
   // 첫 화면이 그려진 직후 백그라운드로 목록을 준비한다(입력을 막지 않는다).
   const preselected = accounts.find((one) => one.account_id === selectedAccountId);

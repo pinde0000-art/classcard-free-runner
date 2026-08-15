@@ -1,27 +1,52 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f2f4f6"><meta name="apple-mobile-web-app-title" content="CLJ"><meta name="apple-mobile-web-app-capable" content="yes"><title>CLJ</title>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#070B16"><meta name="color-scheme" content="dark"><meta name="apple-mobile-web-app-title" content="CLJ"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>CLJ</title>
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png" type="image/png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="./app.css">
 </head><body>
-<!-- 배경 장식 레이어. 순수 장식이라 aria-hidden이며 어떤 스크립트도 참조하지 않는다. -->
-<div class="bg" aria-hidden="true">
-<span class="orb orb-1"></span><span class="orb orb-2"></span><span class="orb orb-3"></span>
-<span class="bg-grid"></span>
-<svg class="bg-art art-tr" viewBox="0 0 200 200" fill="none" stroke="currentColor">
-<circle cx="150" cy="50" r="46" stroke-width=".7"/><circle cx="150" cy="50" r="30" stroke-width=".7"/>
-<path d="M8 128C48 96 96 150 148 112c26-19 38-6 46 2" stroke-width=".8" stroke-linecap="round"/>
-<g class="art-dots"><circle cx="24" cy="26" r="1.5"/><circle cx="44" cy="26" r="1.5"/><circle cx="64" cy="26" r="1.5"/><circle cx="24" cy="46" r="1.5"/><circle cx="44" cy="46" r="1.5"/><circle cx="24" cy="66" r="1.5"/></g>
-</svg>
-<svg class="bg-art art-bl" viewBox="0 0 200 200" fill="none" stroke="currentColor">
-<rect x="18" y="96" width="86" height="58" rx="7" stroke-width=".8" transform="rotate(-9 61 125)"/>
-<rect x="34" y="82" width="86" height="58" rx="7" stroke-width=".8" transform="rotate(4 77 111)"/>
-<path d="M62 118l10 10 20-22" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M126 168c22-10 40-30 48-56" stroke-width=".8" stroke-linecap="round"/>
-</svg>
+
+<!-- 배경: 은은한 그라디언트 오브 · 격자 · 학습 모티프 · 미세 노이즈 -->
+<div class="ambient" aria-hidden="true">
+<span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span>
+<span class="grid"></span>
+<span class="glyphs">
+<svg class="g1" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>
+<svg class="g2" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8L12 3z"/></svg>
+<svg class="g3" viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg>
+<svg class="g4" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10.5h5M7 14h8"/></svg>
+</span>
+<span class="noise"></span>
 </div>
+
+<!-- 브랜드 그라디언트 정의 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#8FA9FF"/><stop offset="55%" stop-color="#A79BFF"/><stop offset="100%" stop-color="#C79AF2"/>
+</linearGradient></defs></svg>
+
+<!-- 넓은 화면 전용 글래스 레일. 좁은 화면에서는 실행 화면 상단 툴바가 같은 역할을 한다. -->
+<aside class="rail" aria-label="주요 메뉴">
+<span class="rail-brand" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg></span>
+<nav class="rail-nav">
+<button type="button" class="rail-item" id="rail-accounts" data-tip="계정" aria-label="계정 선택"><svg viewBox="0 0 24 24"><path d="M16 20v-1.5A3.5 3.5 0 0 0 12.5 15h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3.4"/><path d="M20 20v-1.5a3.5 3.5 0 0 0-2.6-3.4"/><path d="M15.6 4.6a3.4 3.4 0 0 1 0 6.6"/></svg></button>
+<button type="button" class="rail-item" id="rail-runner" data-tip="학습 실행" aria-label="학습 실행"><svg viewBox="0 0 24 24"><path d="M7 5.2v13.6L18.5 12 7 5.2z"/></svg></button>
+</nav>
+<span class="rail-sep" aria-hidden="true"></span>
+<button type="button" class="rail-item" id="rail-refresh" data-tip="목록 새로고침" aria-label="목록 새로고침"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
+</aside>
+
 <main>
 
 <section class="screen" id="screen-accounts">
-<header class="head"><h1>CLJ</h1><p id="account-status" class="status">계정을 불러오는 중입니다.</p></header>
+<header class="head">
+<span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg></span>
+<h1>CLJ</h1>
+<p class="brand-tag">Classcard Runner</p>
+<p id="account-status" class="status">계정을 불러오는 중입니다.</p>
+</header>
 <div class="acct-list" id="account-list"></div>
 <button type="button" class="btn ghost" id="account-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>계정 추가</button>
 <button type="button" class="btn primary" id="account-continue" disabled>이 계정으로 계속</button>
@@ -35,7 +60,7 @@
 </div>
 <p id="status" class="status"></p>
 
-<section class="panel">
+<section class="panel" id="runner-panel">
 <div class="field">
 <span class="lbl" id="lbl-class">클래스</span>
 <select id="class" class="sr-only" tabindex="-1" aria-hidden="true" disabled></select>
@@ -75,7 +100,10 @@
 </section>
 
 <section id="progress" class="progress">
-<div class="prow"><span id="progress-state" class="chip" data-state="idle">대기 중</span><strong id="progress-count" class="count">0/0</strong></div>
+<div class="prow">
+<div class="pmeta"><span class="eyebrow">Progress</span><span id="progress-state" class="chip" data-state="idle">대기 중</span></div>
+<div class="pnums"><strong id="progress-pct" class="pct"><span>0</span><i>%</i></strong><strong id="progress-count" class="count">0/0</strong></div>
+</div>
 <div class="track"><div id="progress-bar" class="fill"></div><div id="progress-glow" class="glow"></div></div>
 </section>
 </section>
@@ -85,7 +113,7 @@
 <div class="sheet-backdrop" data-close></div>
 <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="선택">
 <div class="sheet-handle"></div>
-<div class="sheet-search-wrap" id="sheet-search-wrap" hidden><input id="sheet-search" type="search" autocomplete="off" enterkeyhint="search"></div>
+<div class="sheet-search-wrap" id="sheet-search-wrap" hidden><input id="sheet-search" type="search" autocomplete="off" enterkeyhint="search" placeholder="검색"></div>
 <div class="sheet-list" id="sheet-list"></div>
 </div></div>
 
