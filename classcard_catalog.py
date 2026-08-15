@@ -61,6 +61,9 @@ def discover_catalog():
     driver = make_driver()
     try:
         login(driver)
+        # HTTP 로그인 경로는 인증 쿠키만 Chrome에 설치한다. 로그인 직후의
+        # 빈 탭에서 클래스 목록을 기다리지 말고 인증된 홈을 먼저 연다.
+        driver.get("https://www.classcard.net/")
         class_list = WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".left-class-list"))
         )
