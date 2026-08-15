@@ -414,7 +414,14 @@ def active_scramble_placed_count(driver):
         let node = active;
         for (let i = 0; i < 8 && node; i += 1) {
           const input = node.querySelector('.test-sentence-input');
-          if (input) return input.children.length;
+          if (input) {
+            // 빈 자식(placeholder/캐럿 등)이 섞여 있으면 아무것도 놓지 않았는데
+            // 놓은 것으로 세어, 원문 위치가 한 칸씩 밀린다. 실제 글자가 있는
+            // 자식만 센다.
+            return [...input.children].filter(
+              el => (el.innerText || el.textContent || '').trim()
+            ).length;
+          }
           node = node.parentElement;
         }
         return null;
@@ -515,14 +522,24 @@ def dismiss_test_focus_warning(driver):
     )
 
 
-def find_scramble_choice(driver, expected):
+def find_scramble_choice(driver, expected_token):
+    # 한 줄 안에 대소문자만 다른 같은 단어가 함께 나올 수 있다(예: "The pilot
+    # completed the flight safely"의 'The'와 'the'). 소문자로 접어서 비교하면
+    # DOM 순서상 먼저 나오는 엉뚱한 조각을 누르게 되므로, 대소문자까지 맞는
+    # 조각을 우선 고르고 없을 때만 접어서 비교한다.
+    exact = exact_sentence_token(expected_token)
+    normalized = normalize_sentence_token(expected_token)
+    fallback = None
     for element in scramble_choices(driver):
         try:
-            if normalize_sentence_token(element.text) == expected:
+            text = element.text
+            if exact_sentence_token(text) == exact:
                 return element
+            if fallback is None and normalize_sentence_token(text) == normalized:
+                fallback = element
         except StaleElementReferenceException:
             continue
-    return None
+    return fallback
 
 
 def selected_sentence_token_count(driver):
@@ -566,15 +583,15 @@ def native_pointer_click(driver, element):
         )
 
 
-def _find_click_confirm(driver, expected, expected_start):
+def _find_click_confirm(driver, expected_token, expected_start):
     # solve_sentence_scramble에서 watchdog으로 감싸 호출하는 "조각 찾기 +
     # 클릭 + 반영 확인"의 본체. 이 함수 자체는 원래 코드와 동일하게 동작하되,
     # 그 어떤 하위 호출이 멈춰도 call_with_watchdog가 상한 시간 안에 제어권을
     # 돌려줄 수 있도록 별도 스레드에서 실행 가능한 형태로 분리했다.
     found = {}
 
-    def locate(d, expected=expected, found=found):
-        match = find_scramble_choice(d, expected)
+    def locate(d, expected_token=expected_token, found=found):
+        match = find_scramble_choice(d, expected_token)
         if match is None:
             return False
         found["choice"] = match
@@ -721,17 +738,16 @@ def solve_sentence_scramble(driver, answer):
             just_revealed = False
 
         expected_token = segment[0]
-        expected = normalize_sentence_token(expected_token)
         print(
             f"[scramble] pos={expected_start} line_start={line_start} "
-            f"attempts={word_attempts} target={expected_token!r} "
-            f"choices={choice_texts}",
+            f"attempts={word_attempts} retries={segment_retries} "
+            f"target={expected_token!r} choices={choice_texts}",
             flush=True,
         )
 
         try:
             registered = guarded(
-                driver, _find_click_confirm, 10, driver, expected, expected_start
+                driver, _find_click_confirm, 10, driver, expected_token, expected_start
             )
         except WatchdogTimeout as error:
             # 클라이언트 쪽 HTTP 타임아웃을 걸어도 브라우저/CDP 쪽에서 멈추면
