@@ -1048,6 +1048,11 @@ class TestLearning:
         records = build_records(word_d)
         if not records:
             raise RuntimeError("테스트 정답에 사용할 카드 데이터가 없습니다.")
+        with_examples = sum(1 for record in records if record["example_lines"])
+        print(
+            f"카드 {len(records)}개 (예문 보유 {with_examples}개)",
+            flush=True,
+        )
 
         if not click_visible(driver, ENTRY_SELECTORS, timeout=10):
             raise TimeoutException("테스트 진입 버튼을 찾지 못했습니다.")
