@@ -160,6 +160,14 @@ def meaning_senses(value):
     return senses
 
 
+def blank_stripped(value):
+    # 'She was _____ her gloves.' -> 'she was her gloves.'
+    # 밑줄(빈칸)을 걷어내고 공백을 정리해, 빈칸 표기 차이와 무관하게 비교한다.
+    text = comparable_text(value)
+    text = re.sub(r"[_–—]{2,}", " ", text)
+    return norm_text(text)
+
+
 def senses_overlap(question_senses, card_senses):
     # 문제의 뜻과 카드의 뜻이 완전히 같지 않아도, 한쪽이 다른 쪽에 포함되면
     # 같은 뜻으로 본다(예: 문제 '쌍둥이' vs 카드 '쌍둥이 중의 한 명').
@@ -187,6 +195,19 @@ def answer_candidates(question, records):
         for prompt, answer in record["examples"]:
             if comparable_text(prompt) == question_key:
                 return [answer]
+
+    # 빈칸 채우기 문제는 밑줄 개수나 형태가 카드 예문과 다를 수 있다
+    # (예: 카드는 '_____', 문제는 '______'). 밑줄을 걷어내고 비교한다.
+    question_blank = blank_stripped(question)
+    if question_blank:
+        blank_matches = []
+        for record in records:
+            for prompt, answer in record["examples"]:
+                if blank_stripped(prompt) == question_blank:
+                    if answer not in blank_matches:
+                        blank_matches.append(answer)
+        if len(blank_matches) == 1:
+            return [blank_matches[0]]
 
     for record in records:
         if comparable_text(record["front"]) == question_key:
