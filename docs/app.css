@@ -44,6 +44,9 @@
   --sh-brand:0 1px 2px rgba(7,120,79,.20),0 8px 20px -8px rgba(10,160,106,.45);
   --sh-brand-hover:0 2px 6px rgba(7,120,79,.24),0 14px 28px -10px rgba(10,160,106,.55);
   /* 카드 상단 내부 하이라이트 */
+  /* 버튼 전용 램프: 흰 글자 대비 4.7:1 이상(측정값 4.73~6.14).
+     점·게이지 등 장식에는 더 선명한 --brand를 그대로 쓴다. */
+  --btn-top:#098455;--btn-mid:#087a4f;--btn-bot:#066b45;
   --highlight:inset 0 1px 0 rgba(255,255,255,.85);
   --glass:blur(14px) saturate(1.35);
 }
@@ -75,6 +78,7 @@
     --sh-3:0 24px 56px -18px rgba(0,0,0,.75),0 2px 8px rgba(0,0,0,.4);
     --sh-brand:0 1px 2px rgba(0,0,0,.4),0 8px 20px -8px rgba(24,192,127,.40);
     --sh-brand-hover:0 2px 6px rgba(0,0,0,.45),0 14px 28px -10px rgba(24,192,127,.50);
+    --btn-top:var(--brand-2);--btn-mid:var(--brand);--btn-bot:var(--brand-deep);
     --highlight:inset 0 1px 0 rgba(255,255,255,.06);
   }
 }
@@ -250,7 +254,7 @@ h1{
 }
 .btn svg{width:18px;height:18px;flex:none;display:block}
 .btn.primary{
-  background:linear-gradient(180deg,var(--brand-2) 0%,var(--brand) 62%,var(--brand-deep) 100%);
+  background:linear-gradient(180deg,var(--btn-top) 0%,var(--btn-mid) 62%,var(--btn-bot) 100%);
   color:var(--on-primary);box-shadow:var(--sh-brand),inset 0 1px 0 rgba(255,255,255,.22);
 }
 @media (hover:hover) and (pointer:fine){
@@ -372,7 +376,7 @@ input:disabled{background:var(--surface-3);color:var(--muted);border-color:var(-
 /* ---------- 실행 버튼 ---------- */
 #run{
   width:100%;min-height:54px;border:0;border-radius:var(--r-md);
-  background:linear-gradient(180deg,var(--brand-2) 0%,var(--brand) 62%,var(--brand-deep) 100%);
+  background:linear-gradient(180deg,var(--btn-top) 0%,var(--btn-mid) 62%,var(--btn-bot) 100%);
   color:var(--on-primary);font-size:var(--f-body);font-weight:700;letter-spacing:-.01em;
   font-family:inherit;display:flex;align-items:center;justify-content:center;gap:var(--s2);
   cursor:pointer;box-shadow:var(--sh-brand),inset 0 1px 0 rgba(255,255,255,.22);
@@ -406,7 +410,7 @@ input:disabled{background:var(--surface-3);color:var(--muted);border-color:var(-
 }
 .chip[data-state="preparing"]{background:rgba(99,102,241,.10);color:#4b52c9;border-color:rgba(99,102,241,.26)}
 .chip[data-state="running"]{background:var(--accent-soft);color:var(--accent-ink);border-color:rgba(10,160,106,.30)}
-.chip[data-state="completed"]{background:linear-gradient(180deg,var(--brand-2),var(--brand));color:#fff;border-color:transparent}
+.chip[data-state="completed"]{background:linear-gradient(180deg,var(--btn-top),var(--btn-bot));color:#fff;border-color:transparent}
 .chip[data-state="failed"]{background:var(--danger-soft);color:var(--danger);border-color:rgba(180,35,24,.25)}
 .count{
   font-size:25px;line-height:30px;height:30px;min-width:96px;text-align:right;font-weight:750;
