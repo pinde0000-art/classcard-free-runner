@@ -1,7 +1,24 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f2f4f6"><meta name="apple-mobile-web-app-title" content="CLJ"><meta name="apple-mobile-web-app-capable" content="yes"><title>CLJ</title>
 <link rel="stylesheet" href="./app.css">
-</head><body><main>
+</head><body>
+<!-- 배경 장식 레이어. 순수 장식이라 aria-hidden이며 어떤 스크립트도 참조하지 않는다. -->
+<div class="bg" aria-hidden="true">
+<span class="orb orb-1"></span><span class="orb orb-2"></span><span class="orb orb-3"></span>
+<span class="bg-grid"></span>
+<svg class="bg-art art-tr" viewBox="0 0 200 200" fill="none" stroke="currentColor">
+<circle cx="150" cy="50" r="46" stroke-width=".7"/><circle cx="150" cy="50" r="30" stroke-width=".7"/>
+<path d="M8 128C48 96 96 150 148 112c26-19 38-6 46 2" stroke-width=".8" stroke-linecap="round"/>
+<g class="art-dots"><circle cx="24" cy="26" r="1.5"/><circle cx="44" cy="26" r="1.5"/><circle cx="64" cy="26" r="1.5"/><circle cx="24" cy="46" r="1.5"/><circle cx="44" cy="46" r="1.5"/><circle cx="24" cy="66" r="1.5"/></g>
+</svg>
+<svg class="bg-art art-bl" viewBox="0 0 200 200" fill="none" stroke="currentColor">
+<rect x="18" y="96" width="86" height="58" rx="7" stroke-width=".8" transform="rotate(-9 61 125)"/>
+<rect x="34" y="82" width="86" height="58" rx="7" stroke-width=".8" transform="rotate(4 77 111)"/>
+<path d="M62 118l10 10 20-22" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M126 168c22-10 40-30 48-56" stroke-width=".8" stroke-linecap="round"/>
+</svg>
+</div>
+<main>
 
 <section class="screen" id="screen-accounts">
 <header class="head"><h1>CLJ</h1><p id="account-status" class="status">계정을 불러오는 중입니다.</p></header>
