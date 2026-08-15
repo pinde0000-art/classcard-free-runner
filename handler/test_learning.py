@@ -268,11 +268,22 @@ def reveal_choices(driver):
 
 
 def choose_answer(driver, answers):
-    end_time = time.time() + 2
+    # 문항 전환 직후에는 선택지 영역이 잠깐 사라졌다가 다시 그려진다. 예전에는
+    # 2초 안에 정답 라벨을 못 찾으면 곧바로 실패했는데, 그 사이 영역이 비어
+    # 있으면 "선택지 영역을 찾지 못했습니다"로 끝나 버렸다(31862119060).
+    # 영역이 나타날 때까지 먼저 넉넉히 기다린다.
+    try:
+        WebDriverWait(driver, 5, poll_frequency=0.05).until(
+            lambda d: visible_answer_box(d) is not None
+        )
+    except TimeoutException:
+        pass
+
+    end_time = time.time() + 4
     while time.time() < end_time:
         answer_box = visible_answer_box(driver)
         if answer_box is None:
-            time.sleep(0.03)
+            time.sleep(0.05)
             continue
 
         inputs = answer_box.find_elements(By.CSS_SELECTOR, "input[type='radio']")
@@ -1040,8 +1051,18 @@ class TestLearning:
                         f"({error}). 브라우저 세션이 응답하지 않는 것으로 보입니다."
                     ) from error
             else:
-                reveal_choices(driver)
-                selected = choose_answer(driver, answers)
+                # 문항 전환 직후 선택지가 잠깐 사라지는 경우가 있어, 한 번
+                # 실패하면 문항 번호가 그대로인지 확인하고 다시 시도한다.
+                selected = None
+                for attempt in range(3):
+                    try:
+                        reveal_choices(driver)
+                        selected = choose_answer(driver, answers)
+                        break
+                    except RuntimeError:
+                        if attempt == 2 or current_number(driver) != number:
+                            raise
+                        time.sleep(0.5)
             print(
                 f"테스트 진행: {number}/{expected_count} - "
                 f"{question!r} -> {selected!r}",
