@@ -306,7 +306,9 @@ function openSheet(kind,opener){
   renderSheet('');
   SHEET.hidden=false;
   document.documentElement.classList.add('sheet-open');
-  requestAnimationFrame(()=>{SHEET.classList.add('open');const active=SHEET_LIST.querySelector('.row.is-selected');if(active)active.scrollIntoView({block:'center'})});
+  void SHEET.offsetWidth;
+  SHEET.classList.add('open');
+  const active=SHEET_LIST.querySelector('.row.is-selected');if(active)active.scrollIntoView({block:'center'});
 }
 function closeSheet(){
   if(SHEET.hidden)return;
