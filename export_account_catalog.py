@@ -97,10 +97,13 @@ def main():
     if not account_id or not sync_id:
         raise RuntimeError("계정 동기화에 필요한 값이 없습니다.")
 
-    load_credentials(sync_id)
+    login_id = load_credentials(sync_id)
 
     try:
         nickname, avatar = read_profile()
+        # 사이트 헤더 구조가 바뀌어 표시명을 못 읽어도 계정 선택 화면이
+        # 영원히 "이름 확인 중"으로 남지 않게 로그인 아이디를 사용한다.
+        nickname = nickname or login_id
         print(
             f"프로필 확인: 닉네임 {len(nickname)}자"
             f"{' (첫 글자 ' + nickname[0] + ')' if nickname else ' (찾지 못함)'}, "
