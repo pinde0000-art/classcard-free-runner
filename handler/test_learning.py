@@ -456,6 +456,20 @@ def debug_scramble_state(driver):
               passesBasic: passesBasic(container),
               totalPieces: all.length,
               unclickedTexts: unclicked.map(el => (el.innerText || '').trim()),
+              // 조각이 왜 걸러지는지 보려면 개별 가시성 정보가 필요하다.
+              pieces: all.map(el => {
+                const pr = el.getBoundingClientRect();
+                const ps = getComputedStyle(el);
+                return {
+                  t: (el.innerText || '').trim(),
+                  cls: el.className,
+                  w: Math.round(pr.width),
+                  h: Math.round(pr.height),
+                  disp: ps.display,
+                  vis: ps.visibility,
+                  op: ps.opacity,
+                };
+              }),
             };
           }),
           inputText: [...document.querySelectorAll('.test-sentence-input')]
@@ -745,10 +759,11 @@ def solve_sentence_scramble(driver, answer):
                     time.sleep(0.3)
                     continue
             if empty_pool_waits > EMPTY_POOL_WAIT_LIMIT:
+                debug_state = safe_debug_scramble_state(driver)
                 raise RuntimeError(
                     "문장 배열 조각이 나타나지 않습니다. "
                     f"현재 조각: {choice_texts}, 놓은 개수: {expected_start}, "
-                    f"줄 시작: {line_start}"
+                    f"줄 시작: {line_start}, 디버그: {debug_state}"
                 )
             time.sleep(0.15)
             continue
