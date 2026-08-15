@@ -219,6 +219,7 @@ def validate(payload):
 
 
 def run(payload):
+    started_at = time.time()
     class_id, set_id, start, end, mode, amount = validate(payload)
     title = str(payload.get("title") or f"세트 {set_id}")
     mode_name, route, handler_class = MODES[mode]
@@ -234,7 +235,12 @@ def run(payload):
     try:
         login(driver, authenticated_session)
         open_set(driver, set_id, class_id)
-        progress = read_learning_progress(driver)
+        # 세트 페이지를 방금 띄웠다는 표시. 테스트 모드는 이 페이지를 그대로
+        # 쓰면 되는데도 회차 루프에서 같은 주소를 한 번 더 열어 전체 페이지
+        # 로딩을 중복으로 하고 있었다.
+        set_page_fresh = True
+        # 테스트는 진행률을 쓰지 않으므로(항상 0에서 시작) 조회를 생략한다.
+        progress = {} if mode_name == "테스트" else read_learning_progress(driver)
         current_progress = 0 if mode_name == "테스트" else int(progress.get(mode_name, 0) or 0)
         target_progress = amount * 100
         remaining_rounds = max(
@@ -256,7 +262,11 @@ def run(payload):
         )
         groups = [(label, group) for label, group in groups if group]
         card_type = "+".join(label for label, _ in groups)
-        print(f"선택: {title} / 카드 {start}~{end} / {mode_name} {target_progress}%", flush=True)
+        print(
+            f"선택: {title} / 카드 {start}~{end} / {mode_name} {target_progress}% "
+            f"(준비 {time.time() - started_at:.1f}초)",
+            flush=True,
+        )
         print(f"카드 종류: {card_type}", flush=True)
         print(
             "카드 구성: " + ", ".join(f"{label} {len(group)}개" for label, group in groups),
@@ -292,8 +302,14 @@ def run(payload):
             section = 6000 if len(group) == len(cards) else 4000
             for round_number in range(1, remaining_rounds + 1):
                 if mode_name == "테스트":
-                    open_set(driver, set_id, class_id)
+                    # 앞에서 이미 연 세트 페이지가 그대로 살아 있으면 다시 열지
+                    # 않는다(테스트 모드는 그 사이 페이지를 바꾸지 않는다).
+                    if set_page_fresh:
+                        set_page_fresh = False
+                    else:
+                        open_set(driver, set_id, class_id)
                 else:
+                    set_page_fresh = False
                     driver.get(f"https://www.classcard.net/{route}/{set_id}/{section}/{class_id}")
                     WebDriverWait(driver, 20).until(
                         lambda d: d.find_elements(By.ID, "wrapper-learn")
