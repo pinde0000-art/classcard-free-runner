@@ -606,10 +606,10 @@ function syncDragon() {
     // 잠에서 깨는 순간에만 브레스를 쏜다. preparing 은 여러 번 들어올 수 있다.
     if (pose === 'sleep') {
       setDragon('breath');
-      dragonTimer = setTimeout(() => setDragon('fly'), 2200);
+      dragonTimer = setTimeout(() => setDragon('gone'), 2200);
     }
   } else if (pose !== 'breath') {
-    setDragon('fly');   // 브레스 중이면 그게 끝난 뒤 타이머가 넘긴다
+    setDragon('gone');   // 브레스 중이면 그게 끝난 뒤 타이머가 넘긴다
   }
 }
 const dragonWatch = new MutationObserver(syncDragon);
