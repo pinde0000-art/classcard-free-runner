@@ -588,29 +588,12 @@ $('account-continue').addEventListener('click', async () => {
   await loadAccountCatalog(account);
 });
 
-/* ---------------- 클래스 위의 용 ----------------
-   실행 로직을 건드리지 않는다. 진행률 칩(data-state)과 진행률 표시 여부만
-   지켜보다가 수면 → 브레스 → 비행 으로 포즈를 바꾼다. */
-const DRAGON = $('dragon-stage');
-let dragonTimer = 0;
-function setDragon(pose) {
-  clearTimeout(dragonTimer);
-  DRAGON.dataset.state = pose;
-}
+/* ---------------- 패널 위의 두 마리 ----------------
+   실행 로직을 건드리지 않는다. 진행률이 떠 있는 동안에만 비켜 준다. */
+const DRAGON = $('dragon-perch');
 function syncDragon() {
-  const running = PROGRESS.classList.contains('show');
-  const state = PROGRESS_STATE.dataset.state;
-  if (!running || state === 'idle') { setDragon('sleep'); return; }
-  const pose = DRAGON.dataset.state;
-  if (state === 'preparing') {
-    // 잠에서 깨는 순간에만 브레스를 쏜다. preparing 은 여러 번 들어올 수 있다.
-    if (pose === 'sleep') {
-      setDragon('breath');
-      dragonTimer = setTimeout(() => setDragon('gone'), 2200);
-    }
-  } else if (pose !== 'breath') {
-    setDragon('gone');   // 브레스 중이면 그게 끝난 뒤 타이머가 넘긴다
-  }
+  const busy = PROGRESS.classList.contains('show') && PROGRESS_STATE.dataset.state !== 'idle';
+  DRAGON.dataset.state = busy ? 'gone' : 'perched';
 }
 const dragonWatch = new MutationObserver(syncDragon);
 dragonWatch.observe(PROGRESS_STATE, { attributes: true, attributeFilter: ['data-state'] });

@@ -549,50 +549,34 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
 @keyframes mascotFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @media (min-width:700px){.mascot img{width:min(320px,58%)}}
 
-/* ---------- 20. 실행 화면의 용 ----------
-   패널 위쪽 모서리에 걸쳐 잔다. absolute 라 레이아웃 높이를 먹지 않는다.
-   실행하면 깨어나 브레스를 쏘고, 끝나면 흐려지며 사라진다. */
-.dragon-stage{
+/* ---------- 20. 패널 위의 두 마리 ----------
+   패널 위 모서리에 나란히 앉는다. absolute 라 레이아웃 높이를 먹지 않고,
+   학습이 도는 동안에는 비켜서 진행률에 자리를 내준다. */
+.dragon-perch{
   position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(100% - var(--dg-sink));      /* 아래쪽 일부가 패널에 걸친다 */
-  width:var(--dg-w);height:calc(var(--dg-w) * .47);
+  bottom:calc(100% - var(--dp-sink));      /* 발끝이 패널에 살짝 걸친다 */
+  display:flex;align-items:flex-end;justify-content:center;gap:clamp(4px,2.4vw,18px);
   z-index:2;pointer-events:none;
-  --dg-w:min(clamp(150px,26dvh,232px),62%);--dg-sink:26px}
+  --dp-h:clamp(62px,10dvh,92px);--dp-sink:12px}
 .dragon-glow{
-  position:absolute;left:50%;bottom:4px;transform:translateX(-50%);
-  width:86%;height:52px;border-radius:50%;
-  background:radial-gradient(ellipse,rgba(110,139,255,.22) 0%,rgba(110,139,255,0) 70%);
-  filter:blur(15px);opacity:.7;
-  transition:opacity .6s var(--ease),background .6s var(--ease)}
-.dg{
-  position:absolute;left:0;bottom:0;width:100%;height:auto;
-  opacity:0;transition:opacity .6s var(--ease);
-  filter:drop-shadow(0 3px 10px rgba(4,7,16,.55))}
-.dragon-stage[data-state="sleep"] .dg-sleep,
-.dragon-stage[data-state="breath"] .dg-breath{opacity:1}
+  position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  width:112%;height:44px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(110,139,255,.20) 0%,rgba(110,139,255,0) 70%);
+  filter:blur(14px);opacity:.75;transition:opacity .5s var(--ease)}
+.dp{
+  height:var(--dp-h);width:auto;display:block;
+  filter:drop-shadow(0 4px 9px rgba(4,7,16,.62));
+  transition:opacity .5s var(--ease),transform .5s var(--ease)}
+/* 둘이 어긋나게 흔들리도록 위상을 반대로 준다 */
+.dp-1{animation:dpBob 4.4s var(--ease) infinite}
+.dp-2{animation:dpBob 4.4s var(--ease) -2.2s infinite}
+@keyframes dpBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 
-/* 잠든 동안의 느린 호흡 */
-.dragon-stage[data-state="sleep"] .dg-sleep{animation:dgSleep 5.5s var(--ease) infinite}
-@keyframes dgSleep{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+/* 학습 중에는 살짝 떠오르며 사라진다 */
+.dragon-perch[data-state="gone"] .dp{opacity:0;transform:translateY(-12px);animation:none}
+.dragon-perch[data-state="gone"] .dragon-glow{opacity:0}
 
-/* 브레스: 세로로 긴 포즈라 아래를 기준으로 키운다 */
-.dg-breath{transform-origin:50% 100%;transform:scale(1.5)}
-.dragon-stage[data-state="breath"] .dg-breath{animation:dgBreath 2.2s var(--ease)}
-@keyframes dgBreath{
-  0%{transform:scale(1.46)}
-  18%{transform:scale(1.56)}
-  42%{transform:scale(1.51)}
-  100%{transform:scale(1.5)}}
-.dragon-stage[data-state="breath"] .dragon-glow{
-  opacity:1;background:radial-gradient(ellipse,rgba(150,190,255,.38) 0%,rgba(110,139,255,0) 70%);
-  animation:dgFlash 2.2s var(--ease)}
-@keyframes dgFlash{0%{opacity:.5}16%{opacity:1}55%{opacity:.8}100%{opacity:0}}
-
-/* 학습이 도는 동안에는 자리를 비운다 */
-.dragon-stage[data-state="gone"] .dg,
-.dragon-stage[data-state="gone"] .dragon-glow{opacity:0}
-
-@media (min-width:700px){.dragon-stage{--dg-w:min(280px,54%);--dg-sink:30px}}
+@media (min-width:700px){.dragon-perch{--dp-h:clamp(72px,9dvh,104px);--dp-sink:14px}}
 
 /* ---------- 21. 실행 화면은 한 화면에 고정 ----------
    버튼까지 전부 보이도록 화면 높이에 맞춰 컨트롤이 줄어든다.
@@ -606,10 +590,10 @@ body:has(#screen-runner:not([hidden])) main{
 #screen-runner{min-height:0;gap:clamp(7px,1.4dvh,16px)}
 #screen-runner .status{font-size:12.5px;line-height:1.4}
 #screen-runner .panel{padding:clamp(11px,2dvh,22px);gap:clamp(7px,1.6dvh,18px)}
-/* 용이 자는 동안에는 패널을 내려 상태 텍스트를 가리지 않게 하고,
-   용이 사라지면 그 공간을 진행률에 돌려준다. */
-#screen-runner .panel{margin-top:0;transition:margin-top .6s var(--ease)}
-#screen-runner:has(#dragon-stage:not([data-state="gone"])) .panel{margin-top:clamp(0px,7dvh,64px)}
+/* 용이 앉아 있는 동안에는 패널을 내려 상태 텍스트를 가리지 않게 하고,
+   용이 비키면 그 공간을 진행률에 돌려준다. */
+#screen-runner .panel{margin-top:0;transition:margin-top .55s var(--ease)}
+#screen-runner:has(#dragon-perch[data-state="perched"]) .panel{margin-top:clamp(0px,7.6dvh,68px)}
 #screen-runner .field{gap:clamp(5px,.9dvh,9px)}
 #screen-runner .picker{min-height:clamp(44px,6.2dvh,58px)}
 #screen-runner input[type=number]{height:clamp(40px,5.4dvh,50px)}
@@ -619,8 +603,8 @@ body:has(#screen-runner:not([hidden])) main{
 #screen-runner .progress{padding:clamp(12px,1.8dvh,20px)}
 #screen-runner .pct{font-size:clamp(28px,4.4dvh,44px)}
 #screen-runner .track{margin-top:clamp(9px,1.5dvh,18px)}
-/* 마지막 안전장치: 그래도 넘치면 잘리지 않고 패널만 스크롤된다 */
-#screen-runner .panel{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+/* 패널에는 overflow 를 걸지 않는다. 위로 튀어나온 용이 잘려 버린다. */
+#screen-runner .panel{min-height:0}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;

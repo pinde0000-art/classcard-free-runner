@@ -65,12 +65,12 @@
 <p id="status" class="status"></p>
 
 <section class="panel" id="runner-panel">
-<!-- 패널 위쪽 모서리에 걸쳐 자는 용. 자리를 차지하지 않도록 absolute 로 띄운다.
-     장식이라 aria-hidden이며 상태는 진행률 칩을 따라갈 뿐 스스로 갖지 않는다. -->
-<div class="dragon-stage" id="dragon-stage" data-state="sleep" aria-hidden="true">
+<!-- 패널 위 모서리에 나란히 앉은 두 마리. 자리를 차지하지 않도록 absolute 로 띄운다.
+     장식이라 aria-hidden이며, 학습이 도는 동안에는 비켜 준다. -->
+<div class="dragon-perch" id="dragon-perch" data-state="perched" aria-hidden="true">
 <span class="dragon-glow"></span>
-<img class="dg dg-sleep" src="./dragon-sleep.png" alt="" width="520" height="244" decoding="async" fetchpriority="low">
-<img class="dg dg-breath" src="./dragon-breath.png" alt="" width="620" height="456" decoding="async" fetchpriority="low">
+<img class="dp dp-1" src="./dragon-a.png" alt="" width="279" height="300" decoding="async" fetchpriority="low">
+<img class="dp dp-2" src="./dragon-b.png" alt="" width="302" height="300" decoding="async" fetchpriority="low">
 </div>
 <div class="field">
 <span class="lbl" id="lbl-class">클래스</span>
