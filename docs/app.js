@@ -588,6 +588,34 @@ $('account-continue').addEventListener('click', async () => {
   await loadAccountCatalog(account);
 });
 
+/* ---------------- 클래스 위의 용 ----------------
+   실행 로직을 건드리지 않는다. 진행률 칩(data-state)과 진행률 표시 여부만
+   지켜보다가 수면 → 브레스 → 비행 으로 포즈를 바꾼다. */
+const DRAGON = $('dragon-stage');
+let dragonTimer = 0;
+function setDragon(pose) {
+  clearTimeout(dragonTimer);
+  DRAGON.dataset.state = pose;
+}
+function syncDragon() {
+  const running = PROGRESS.classList.contains('show');
+  const state = PROGRESS_STATE.dataset.state;
+  if (!running || state === 'idle') { setDragon('sleep'); return; }
+  const pose = DRAGON.dataset.state;
+  if (state === 'preparing') {
+    // 잠에서 깨는 순간에만 브레스를 쏜다. preparing 은 여러 번 들어올 수 있다.
+    if (pose === 'sleep') {
+      setDragon('breath');
+      dragonTimer = setTimeout(() => setDragon('fly'), 2200);
+    }
+  } else if (pose !== 'breath') {
+    setDragon('fly');   // 브레스 중이면 그게 끝난 뒤 타이머가 넘긴다
+  }
+}
+const dragonWatch = new MutationObserver(syncDragon);
+dragonWatch.observe(PROGRESS_STATE, { attributes: true, attributeFilter: ['data-state'] });
+dragonWatch.observe(PROGRESS, { attributes: true, attributeFilter: ['class'] });
+
 /* ---------------- 넓은 화면 레일 ----------------
    자체 상태를 갖지 않는다. 클릭은 기존 버튼에 그대로 위임하고,
    활성/비활성 표시는 그 버튼들의 상태를 그대로 비춘다. */

@@ -64,6 +64,15 @@
 </div>
 <p id="status" class="status"></p>
 
+<!-- 클래스 위의 용. 대기 중엔 자고, 실행하면 브레스를 쏜 뒤 날아다닌다.
+     장식이라 aria-hidden이며 상태는 진행률 칩을 따라갈 뿐 스스로 갖지 않는다. -->
+<div class="dragon-stage" id="dragon-stage" data-state="sleep" aria-hidden="true">
+<span class="dragon-glow"></span>
+<img class="dg dg-sleep" src="./dragon-sleep.png" alt="" width="460" height="277" decoding="async" fetchpriority="low">
+<img class="dg dg-breath" src="./dragon-breath.png" alt="" width="560" height="423" decoding="async" fetchpriority="low">
+<img class="dg dg-fly" src="./dragon-fly.png" alt="" width="520" height="473" decoding="async" fetchpriority="low">
+</div>
+
 <section class="panel" id="runner-panel">
 <div class="field">
 <span class="lbl" id="lbl-class">클래스</span>

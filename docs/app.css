@@ -549,6 +549,51 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
 @keyframes mascotFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @media (min-width:700px){.mascot img{width:min(320px,58%)}}
 
+/* ---------- 20. 실행 화면의 용 ----------
+   수면 → 브레스 → 비행 세 포즈가 같은 자리에서 교차 페이드된다.
+   스프라이트 배경이 페이지 배경과 같은 색이라 패널 밖(페이지 위)에 둔다. */
+.dragon-stage{position:relative;height:148px;margin:-2px 0 0;pointer-events:none}
+.dragon-glow{
+  position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+  width:min(290px,78%);height:72px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(110,139,255,.24) 0%,rgba(110,139,255,0) 70%);
+  filter:blur(18px);opacity:.75;transition:opacity .6s var(--ease),background .6s var(--ease)}
+.dg{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+  opacity:0;transition:opacity .55s var(--ease);
+  filter:drop-shadow(0 0 12px rgba(110,139,255,.28))}
+.dragon-stage[data-state="sleep"] .dg-sleep,
+.dragon-stage[data-state="breath"] .dg-breath,
+.dragon-stage[data-state="fly"] .dg-fly{opacity:1}
+
+/* 잠든 동안의 느린 호흡 */
+.dragon-stage[data-state="sleep"] .dg-sleep{animation:dgSleep 5.5s var(--ease) infinite}
+@keyframes dgSleep{0%,100%{transform:scale(1)}50%{transform:scale(1.018)}}
+
+/* 포즈마다 그림 안에서 차지하는 비율이 달라, 보이는 크기를 맞춰 준다
+   (contain 이라 세로가 긴 비행 포즈가 가장 작게 잡힌다) */
+.dg-breath{transform:scale(1.06)}
+.dg-fly{transform:scale(1.12)}
+
+/* 브레스: 짧게 앞으로 내지르고 빛이 번진다 */
+.dragon-stage[data-state="breath"] .dg-breath{animation:dgBreath 2.2s var(--ease)}
+@keyframes dgBreath{
+  0%{transform:scale(1.045)}
+  18%{transform:scale(1.095)}
+  42%{transform:scale(1.068)}
+  100%{transform:scale(1.06)}}
+.dragon-stage[data-state="breath"] .dragon-glow{
+  opacity:1;background:radial-gradient(ellipse,rgba(150,190,255,.40) 0%,rgba(110,139,255,0) 70%);
+  animation:dgFlash 2.2s var(--ease)}
+@keyframes dgFlash{0%{opacity:.5}16%{opacity:1}55%{opacity:.85}100%{opacity:.75}}
+
+/* 비행: 아주 얕게 위아래로 */
+.dragon-stage[data-state="fly"] .dg-fly{animation:dgFly 5s var(--ease) infinite}
+@keyframes dgFly{0%,100%{transform:translateY(0) scale(1.12)}50%{transform:translateY(-7px) scale(1.12)}}
+.dragon-stage[data-state="fly"] .dragon-glow{opacity:.5}
+
+@media (min-width:700px){.dragon-stage{height:180px}}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
     transition-duration:.001ms!important;scroll-behavior:auto!important}
