@@ -582,7 +582,7 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
    두 용이 동시에 구슬을 쏘고, 실행 버튼 아래에서 부딪혀 터진 뒤
    그 자리에서 학습중 UI가 떠오른다. 시작·도착 좌표는 JS가 실측해 넣는다. */
 #screen-runner{position:relative}
-.fx{position:absolute;inset:0;z-index:3;pointer-events:none;--orb:17px;--fly:640ms;--burst:600ms}
+.fx{position:absolute;inset:0;z-index:3;pointer-events:none;--orb:17px;--fly:900ms;--burst:600ms}
 
 .fx-orb{position:absolute;left:0;top:0;opacity:0;transform:translateX(var(--sx,0))}
 .fx-orb i{
@@ -601,15 +601,23 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
   background:radial-gradient(circle,#F5F1FF 0%,#BCA4FF 30%,#8B6CF0 58%,rgba(139,108,240,0) 74%);
   box-shadow:0 0 15px 5px rgba(154,114,240,.85),0 0 40px 14px rgba(154,114,240,.42)}
 
-.is-launching .fx-orb{animation:fxX var(--fly) cubic-bezier(.5,.02,.62,.6) forwards,
+/* 좌우로 크게 돌아서 간다.
+   --px 는 바깥으로 부풀었을 때의 정점(왼쪽 구슬은 더 왼쪽, 오른쪽은 더 오른쪽),
+   --py 는 떨어지기 직전 살짝 떠오르는 높이. 둘 다 화면 밖으로 나가지 않게
+   JS가 실측해서 넣는다. 구간별 감속/가속은 키프레임마다 따로 준다. */
+.is-launching .fx-orb{animation:fxX var(--fly) linear forwards,
                                 fxIn var(--fly) linear forwards}
-.is-launching .fx-orb i{animation:fxY var(--fly) cubic-bezier(.34,.44,.5,1) forwards}
-@keyframes fxX{from{transform:translateX(var(--sx))}to{transform:translateX(var(--tx))}}
+.is-launching .fx-orb i{animation:fxY var(--fly) linear forwards}
+@keyframes fxX{
+  0%{transform:translateX(var(--sx));animation-timing-function:cubic-bezier(.18,.72,.4,1)}
+  44%{transform:translateX(var(--px));animation-timing-function:cubic-bezier(.5,0,.62,1)}
+  100%{transform:translateX(var(--tx))}}
 @keyframes fxY{
-  0%{transform:translateY(var(--sy)) scale(.35)}
-  15%{transform:translateY(var(--sy)) scale(1)}
+  0%{transform:translateY(var(--sy)) scale(.3);animation-timing-function:cubic-bezier(.2,.8,.4,1)}
+  12%{transform:translateY(var(--sy)) scale(1);animation-timing-function:cubic-bezier(.3,.7,.5,1)}
+  36%{transform:translateY(var(--py)) scale(1);animation-timing-function:cubic-bezier(.55,0,.72,1)}
   100%{transform:translateY(var(--ty)) scale(1)}}
-@keyframes fxIn{0%{opacity:0}9%{opacity:1}92%{opacity:1}100%{opacity:1}}
+@keyframes fxIn{0%{opacity:0}9%{opacity:1}100%{opacity:1}}
 .is-arrived .fx-orb{opacity:0}
 
 /* 충돌 지점의 폭발 */

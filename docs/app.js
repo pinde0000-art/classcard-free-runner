@@ -593,24 +593,34 @@ $('account-continue').addEventListener('click', async () => {
    실행 순간: 두 용이 동시에 구슬을 쏘고 → 실행 버튼 아래에서 부딪혀 터지고
    → 그 자리에서 학습중 UI가 떠오른다. */
 const DRAGON = $('dragon-perch'), RUN_FX = $('run-fx'), RUN_SCREEN = $('screen-runner');
-const FLY_MS = 640, BURST_MS = 600;
+const BURST_MS = 600;
+const flyMs = () => parseFloat(getComputedStyle(RUN_FX).getPropertyValue('--fly')) || 900;
 let flyTimer = 0, burstTimer = 0, launching = false;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-/* 좌표를 실측해 CSS 변수로 넘긴다. 도착점은 패널 여백이 걷힌 뒤의 위치라야
-   구슬이 학습중 UI가 실제로 뜨는 자리에서 터진다. */
+/* 좌표를 실측해 CSS 변수로 넘긴다.
+   도착점은 패널 여백이 걷힌 뒤의 위치라야 구슬이 학습중 UI가 실제로 뜨는 자리에서 터진다.
+   정점(--px,--py)은 좌우로 크게 도는 궤적의 바깥쪽 꼭짓점이며, 화면 밖으로
+   벗어나지 않도록 가장자리에서 잘라 둔다. */
 function placeRunFx() {
   const screen = RUN_SCREEN.getBoundingClientRect();
   const run = RUN.getBoundingClientRect();
   const sink = parseFloat(getComputedStyle(RUNNER_PANEL).marginTop) || 0;
+  const edge = 22;
+  const swing = clamp(screen.width * 0.34, 74, 150);
   RUN_FX.style.setProperty('--tx', `${run.left + run.width / 2 - screen.left}px`);
   RUN_FX.style.setProperty('--ty', `${run.bottom - screen.top - sink + 44}px`);
-  for (const [from, orb] of [['.dp-1', '.fx-l'], ['.dp-2', '.fx-r']]) {
+  for (const [from, orb, dir] of [['.dp-1', '.fx-l', -1], ['.dp-2', '.fx-r', 1]]) {
     const source = document.querySelector(from);
     const target = RUN_FX.querySelector(orb);
     if (!source || !target) continue;
     const r = source.getBoundingClientRect();
-    target.style.setProperty('--sx', `${r.left + r.width / 2 - screen.left}px`);
-    target.style.setProperty('--sy', `${r.top + r.height * 0.42 - screen.top}px`);
+    const sx = r.left + r.width / 2 - screen.left;
+    const sy = r.top + r.height * 0.42 - screen.top;
+    target.style.setProperty('--sx', `${sx}px`);
+    target.style.setProperty('--sy', `${sy}px`);
+    target.style.setProperty('--px', `${clamp(sx + dir * swing, edge, screen.width - edge)}px`);
+    target.style.setProperty('--py', `${Math.max(edge, sy - 30)}px`);
   }
 }
 function playRunFx() {
@@ -625,7 +635,7 @@ function playRunFx() {
     // fx-done 이 붙어야 학습중 UI가 나타난다. 폭발과 함께 떠오른다.
     RUN_SCREEN.classList.add('is-arrived', 'fx-done');
     burstTimer = setTimeout(() => RUN_SCREEN.classList.remove('is-arrived'), BURST_MS + 200);
-  }, FLY_MS);
+  }, flyMs());
 }
 function syncDragon() {
   const busy = PROGRESS.classList.contains('show') && PROGRESS_STATE.dataset.state !== 'idle';
