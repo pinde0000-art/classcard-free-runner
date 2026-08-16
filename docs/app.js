@@ -588,12 +588,52 @@ $('account-continue').addEventListener('click', async () => {
   await loadAccountCatalog(account);
 });
 
-/* ---------------- 패널 위의 두 마리 ----------------
-   실행 로직을 건드리지 않는다. 진행률이 떠 있는 동안에만 비켜 준다. */
-const DRAGON = $('dragon-perch');
+/* ---------------- 패널 위의 두 마리 + 실행 연출 ----------------
+   실행 로직은 건드리지 않는다. 진행률이 떠 있는지만 보고 반응한다.
+   실행 순간: 두 용이 동시에 구슬을 쏘고 → 실행 버튼 아래에서 부딪혀 터지고
+   → 그 자리에서 학습중 UI가 떠오른다. */
+const DRAGON = $('dragon-perch'), RUN_FX = $('run-fx'), RUN_SCREEN = $('screen-runner');
+const FLY_MS = 640, BURST_MS = 600;
+let flyTimer = 0, burstTimer = 0, launching = false;
+
+/* 좌표를 실측해 CSS 변수로 넘긴다. 도착점은 패널 여백이 걷힌 뒤의 위치라야
+   구슬이 학습중 UI가 실제로 뜨는 자리에서 터진다. */
+function placeRunFx() {
+  const screen = RUN_SCREEN.getBoundingClientRect();
+  const run = RUN.getBoundingClientRect();
+  const sink = parseFloat(getComputedStyle(RUNNER_PANEL).marginTop) || 0;
+  RUN_FX.style.setProperty('--tx', `${run.left + run.width / 2 - screen.left}px`);
+  RUN_FX.style.setProperty('--ty', `${run.bottom - screen.top - sink + 44}px`);
+  for (const [from, orb] of [['.dp-1', '.fx-l'], ['.dp-2', '.fx-r']]) {
+    const source = document.querySelector(from);
+    const target = RUN_FX.querySelector(orb);
+    if (!source || !target) continue;
+    const r = source.getBoundingClientRect();
+    target.style.setProperty('--sx', `${r.left + r.width / 2 - screen.left}px`);
+    target.style.setProperty('--sy', `${r.top + r.height * 0.42 - screen.top}px`);
+  }
+}
+function playRunFx() {
+  if (launching) return;
+  launching = true;
+  placeRunFx();                       // 용이 아직 제자리일 때 출발점을 잡는다
+  DRAGON.dataset.state = 'gone';      // 쏘면서 비켜난다
+  RUN_SCREEN.classList.remove('is-arrived');
+  void RUN_FX.offsetWidth;            // 애니메이션 재시작
+  RUN_SCREEN.classList.add('is-launching');
+  flyTimer = setTimeout(() => {
+    RUN_SCREEN.classList.remove('is-launching');
+    RUN_SCREEN.classList.add('is-arrived');
+    burstTimer = setTimeout(() => RUN_SCREEN.classList.remove('is-arrived'), BURST_MS + 200);
+  }, FLY_MS);
+}
 function syncDragon() {
   const busy = PROGRESS.classList.contains('show') && PROGRESS_STATE.dataset.state !== 'idle';
-  DRAGON.dataset.state = busy ? 'gone' : 'perched';
+  if (busy) { playRunFx(); return; }
+  clearTimeout(flyTimer); clearTimeout(burstTimer);
+  launching = false;
+  RUN_SCREEN.classList.remove('is-launching', 'is-arrived');
+  DRAGON.dataset.state = 'perched';
 }
 const dragonWatch = new MutationObserver(syncDragon);
 dragonWatch.observe(PROGRESS_STATE, { attributes: true, attributeFilter: ['data-state'] });

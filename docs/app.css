@@ -578,6 +578,68 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
 
 @media (min-width:700px){.dragon-perch{--dp-h:clamp(72px,9dvh,104px);--dp-sink:14px}}
 
+/* ---------- 20b. 실행 연출 ----------
+   두 용이 동시에 구슬을 쏘고, 실행 버튼 아래에서 부딪혀 터진 뒤
+   그 자리에서 학습중 UI가 떠오른다. 시작·도착 좌표는 JS가 실측해 넣는다. */
+#screen-runner{position:relative}
+.fx{position:absolute;inset:0;z-index:3;pointer-events:none;--orb:17px;--fly:640ms;--burst:600ms}
+
+.fx-orb{position:absolute;left:0;top:0;opacity:0;transform:translateX(var(--sx,0))}
+.fx-orb i{
+  display:block;width:var(--orb);height:var(--orb);border-radius:50%;
+  margin:calc(var(--orb) / -2) 0 0 calc(var(--orb) / -2);
+  transform:translateY(var(--sy,0))}
+/* 꼬리: 진행 방향 반대편으로 늘어지는 잔광 */
+.fx-orb i::after{
+  content:'';position:absolute;left:50%;bottom:70%;width:3px;height:30px;
+  transform:translateX(-50%);border-radius:2px;opacity:.55;
+  background:linear-gradient(180deg,transparent,currentColor)}
+.fx-l i{color:#7E96FF;
+  background:radial-gradient(circle,#F1F4FF 0%,#9DB2FF 30%,#5B7CFF 58%,rgba(91,124,255,0) 74%);
+  box-shadow:0 0 15px 5px rgba(110,139,255,.85),0 0 40px 14px rgba(110,139,255,.42)}
+.fx-r i{color:#B49BFF;
+  background:radial-gradient(circle,#F5F1FF 0%,#BCA4FF 30%,#8B6CF0 58%,rgba(139,108,240,0) 74%);
+  box-shadow:0 0 15px 5px rgba(154,114,240,.85),0 0 40px 14px rgba(154,114,240,.42)}
+
+.is-launching .fx-orb{animation:fxX var(--fly) cubic-bezier(.5,.02,.62,.6) forwards,
+                                fxIn var(--fly) linear forwards}
+.is-launching .fx-orb i{animation:fxY var(--fly) cubic-bezier(.34,.44,.5,1) forwards}
+@keyframes fxX{from{transform:translateX(var(--sx))}to{transform:translateX(var(--tx))}}
+@keyframes fxY{
+  0%{transform:translateY(var(--sy)) scale(.35)}
+  15%{transform:translateY(var(--sy)) scale(1)}
+  100%{transform:translateY(var(--ty)) scale(1)}}
+@keyframes fxIn{0%{opacity:0}9%{opacity:1}92%{opacity:1}100%{opacity:1}}
+.is-arrived .fx-orb{opacity:0}
+
+/* 충돌 지점의 폭발 */
+.fx-burst{position:absolute;left:0;top:0;opacity:0;transform:translate(var(--tx,0),var(--ty,0))}
+.is-arrived .fx-burst{opacity:1}
+.fx-flash{
+  position:absolute;left:50%;top:50%;width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;opacity:0;
+  background:radial-gradient(circle,rgba(236,241,255,.95) 0%,rgba(130,155,255,.55) 30%,rgba(110,139,255,0) 68%)}
+.is-arrived .fx-flash{animation:fxFlash var(--burst) var(--ease) forwards}
+@keyframes fxFlash{0%{transform:scale(.2);opacity:0}18%{transform:scale(1);opacity:1}100%{transform:scale(1.55);opacity:0}}
+.fx-ring{
+  position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+  border-radius:50%;border:2px solid rgba(168,192,255,.9);opacity:0}
+.fx-ring2{border-color:rgba(178,150,255,.7)}
+.is-arrived .fx-ring{animation:fxRing var(--burst) var(--ease) forwards}
+.is-arrived .fx-ring2{animation-delay:100ms}
+@keyframes fxRing{0%{transform:scale(.3);opacity:1}100%{transform:scale(5.4);opacity:0}}
+
+/* 구슬이 부딪히기 전까지 학습중 UI는 자리만 잡고 숨어 있는다 */
+#screen-runner #progress{
+  animation:none;opacity:0;transform:translateY(12px);
+  transition:opacity .5s var(--ease),transform .5s var(--ease)}
+#screen-runner #progress.show{opacity:1;transform:none}
+#screen-runner.is-launching #progress.show{opacity:0;transform:translateY(12px)}
+
+@media (prefers-reduced-motion:reduce){
+  .fx{display:none}
+  #screen-runner #progress,#screen-runner #progress.show{opacity:1;transform:none}
+}
+
 /* ---------- 21. 실행 화면은 한 화면에 고정 ----------
    버튼까지 전부 보이도록 화면 높이에 맞춰 컨트롤이 줄어든다.
    계정 화면은 그대로 스크롤된다(마스코트가 아래에 있다). */
