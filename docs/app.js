@@ -616,14 +616,14 @@ function placeRunFx() {
 function playRunFx() {
   if (launching) return;
   launching = true;
+  RUN_SCREEN.classList.remove('is-arrived', 'fx-done');
   placeRunFx();                       // 용이 아직 제자리일 때 출발점을 잡는다
   DRAGON.dataset.state = 'gone';      // 쏘면서 비켜난다
-  RUN_SCREEN.classList.remove('is-arrived');
-  void RUN_FX.offsetWidth;            // 애니메이션 재시작
   RUN_SCREEN.classList.add('is-launching');
   flyTimer = setTimeout(() => {
     RUN_SCREEN.classList.remove('is-launching');
-    RUN_SCREEN.classList.add('is-arrived');
+    // fx-done 이 붙어야 학습중 UI가 나타난다. 폭발과 함께 떠오른다.
+    RUN_SCREEN.classList.add('is-arrived', 'fx-done');
     burstTimer = setTimeout(() => RUN_SCREEN.classList.remove('is-arrived'), BURST_MS + 200);
   }, FLY_MS);
 }
@@ -632,7 +632,7 @@ function syncDragon() {
   if (busy) { playRunFx(); return; }
   clearTimeout(flyTimer); clearTimeout(burstTimer);
   launching = false;
-  RUN_SCREEN.classList.remove('is-launching', 'is-arrived');
+  RUN_SCREEN.classList.remove('is-launching', 'is-arrived', 'fx-done');
   DRAGON.dataset.state = 'perched';
 }
 const dragonWatch = new MutationObserver(syncDragon);
