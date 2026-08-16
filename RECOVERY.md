@@ -56,9 +56,29 @@ npx wrangler secret put RUNNER_KEY
 gh secret set RUNNER_KEY --repo pinde0000-art/classcard-free-runner
 ```
 
-`ACCOUNT_KEY`는 반드시 **원래 값 그대로** 넣어야 한다. 새로 만들면 KV에 있는
-기존 계정 자격증명을 하나도 복호화하지 못해, 모든 사용자가 계정을 다시
-연결해야 한다.
+### 원래 값을 잃었다면
+
+둘 다 새로 만들 수 있다. 영구 손실은 아니다.
+
+**RUNNER_KEY** 는 값을 비교하는 용도뿐이라 아무 때나 새로 만들어도 된다.
+Worker Secret 과 GitHub Secret 에 같은 새 값을 넣으면 끝이다.
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('base64'))"
+```
+
+**ACCOUNT_KEY** 를 새로 만들면 KV 에 있던 기존 암호문은 못 읽는다. 대신 앱이
+그 상황을 이미 처리한다. 복호화에 실패하면 Worker 가 "재로그인이 필요합니다"
+를 돌려주고, `app.js` 의 `statusOf()` 가 계정을 **로그인 필요** 상태로 바꾼다.
+사용자는 점 세 개 → **다시 로그인** 으로 아이디와 비밀번호를 다시 넣으면 된다.
+계정 항목과 `account_token` 은 남아 있어 이 흐름이 그대로 이어진다.
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+즉 최악의 경우가 계정마다 재로그인 한 번이다. 그래도 원래 값이 있으면 그
+수고조차 없으니 보관해 두는 편이 낫다.
 
 ### 4. 확인
 
