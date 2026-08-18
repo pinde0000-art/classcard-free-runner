@@ -162,7 +162,32 @@ def usable_input(element):
         return False
 
 
-def get_spell_input(driver):
+def get_spell_input(driver, timeout=2.0):
+    """입력칸을 돌려준다. 못 찾으면 잠깐 기다렸다가 다시 본다.
+
+    카드가 넘어가길 기다릴 때 쓰는 read_card_state 와 같은 자바스크립트가
+    고른 요소를 그대로 받는다. 예전에는 여기서 파이썬이 따로 찾느라, 대기
+    쪽은 "입력칸 있음"인데 여기서는 못 찾는 어긋남이 났다. 카드 전환 중에
+    잠시 사라지는 순간에 걸리면 그대로 실패했으므로 짧게 재시도한다.
+    """
+    end_time = time.time() + timeout
+    while True:
+        element = read_card_state(driver).get("input")
+        if element is not None:
+            return element
+        element = find_spell_input_fallback(driver)
+        if element is not None:
+            return element
+        if time.time() >= end_time:
+            break
+        time.sleep(0.05)
+    state = driver.execute_script(
+        "return (document.body.innerText || '').slice(-600);"
+    )
+    raise TimeoutException(f"입력칸을 찾지 못했습니다. 현재 화면: {state}")
+
+
+def find_spell_input_fallback(driver):
     input_class = driver.execute_script("return window.cheat_input_class || ''; ")
     selectors = []
     if input_class:
@@ -191,15 +216,15 @@ def get_spell_input(driver):
         ):
             if usable_input(element):
                 return element
-    raise TimeoutException("spell input not found")
+    return None
 
 
 def has_spell_input(driver):
-    try:
-        get_spell_input(driver)
+    # 화면 상태를 볼 뿐이므로 재시도하지 않는다. start_spell 처럼 "아직
+    # 준비가 안 됐다"를 판단하는 쪽에서 기다림이 겹치면 느려진다.
+    if read_card_state(driver).get("hasInput"):
         return True
-    except Exception:
-        return False
+    return find_spell_input_fallback(driver) is not None
 
 
 def visible_element(driver, selector):
@@ -563,11 +588,12 @@ for (const selector of textSelectors) {
 return {
     cardId: card ? (card.getAttribute('data-idx') || '') : '',
     hasInput: !!input,
+    input: input,
     blocks: blocks.filter(Boolean),
 };
 """
 
-EMPTY_STATE = {"cardId": "", "hasInput": False, "blocks": []}
+EMPTY_STATE = {"cardId": "", "hasInput": False, "input": None, "blocks": []}
 
 
 def read_card_state(driver):
