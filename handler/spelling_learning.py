@@ -499,8 +499,7 @@ def click_confirm(driver):
     return False
 
 
-def get_visible_korean_prompt(driver, da_k):
-    korean_terms = [norm_text(value) for value in da_k if norm_text(value) and value != 0]
+def prompt_blocks(driver):
     blocks = []
 
     # 첫 문제 이후에는 활성 카드에서 "showing" 클래스가 빠질 수 있다.
@@ -538,35 +537,50 @@ def get_visible_korean_prompt(driver, da_k):
     ]
     for selector in selectors:
         blocks.extend(visible_texts(driver, selector))
+    return blocks
 
+
+def find_prompt_card(driver, da_e, da_k, examples):
+    """화면에 떠 있는 카드가 몇 번인지 찾는다. 정답 자체는 고르지 않는다.
+
+    스펠은 언제나 영어 철자를 입력하는 모드다. 예전에는 화면에서 읽어낸
+    글자를 그대로 '문제'로 삼고 반대쪽 값을 답으로 넣었는데, 뜻이 화면에
+    없고 예문만 보이는 카드에서는 예문 속 영어 단어가 문제로 잡혀 한국어를
+    입력해 버렸다. 그래서 카드 번호만 찾고, 정답은 호출부가 da_e 에서 꺼낸다.
+    """
+    blocks = prompt_blocks(driver)
+    lines = []
+    joined = ""
     for block in blocks:
-        block_text = norm_text(block)
-        lines = [norm_text(line) for line in block.splitlines() if norm_text(line)]
-        for line in lines:
-            if line in IGNORE_TEXTS:
-                continue
-            if line in korean_terms:
-                return line
-        for term in sorted(korean_terms, key=len, reverse=True):
-            if term and term in block_text:
-                return term
-    return ""
+        joined += "\n" + norm_text(block)
+        lines.extend(norm_text(line) for line in block.splitlines())
+    lines = {line for line in lines if line and line not in IGNORE_TEXTS}
 
+    # 예문 -> 뜻 -> 영어 순으로 "한 줄 전체가 일치"하는 것을 먼저 본다.
+    # 예문이 가장 확실하다. 뜻과 영어가 다른 카드의 예문 안에 섞여 있어도
+    # 줄 단위 일치는 흔들리지 않는다.
+    for terms in (examples, da_k, da_e):
+        for index, value in enumerate(terms):
+            term = norm_text(value)
+            if term and term in lines:
+                return index
 
-def get_english_answer(question, da_e, da_k):
-    question = norm_text(question)
-    for english, korean in zip(da_e, da_k):
-        if norm_text(korean) == question:
-            return norm_text(english)
-        if norm_text(english) == question:
-            return norm_text(korean)
-    return ""
+    # 줄 단위로 못 찾으면 부분 문자열로 되돌아간다. 짧은 단어가 남의 예문에
+    # 우연히 들어가는 일이 있어 가장 긴 것을 고른다.
+    candidates = []
+    for index, (english, korean) in enumerate(zip(da_e, da_k)):
+        for term in (norm_text(korean), norm_text(english)):
+            if term and term in joined:
+                candidates.append((len(term), index))
+    if candidates:
+        candidates.sort(reverse=True)
+        return candidates[0][1]
+    return -1
 
 
 def advance_to_next_card(driver):
     # 단어 스펠도 문장 스펠처럼 "다음카드" 버튼이 떠 있을 때가 있다. 버튼이
-    # 없으면 페이지가 알아서 넘어간 것이므로 아무것도 하지 않는다. 입력칸에
-    # 포커스가 있는 상태라 스페이스/엔터를 대신 보내지는 않는다.
+    # 없으면 페이지가 알아서 넘어간 것이므로 아무것도 하지 않는다.
     for selector in (
         "#wrapper-learn .btnNextCard",
         "#wrapper-learn .btn-next-card",
@@ -579,32 +593,41 @@ def advance_to_next_card(driver):
                     return True
             except Exception:
                 continue
+
+    # 틀린 카드는 "모르는 카드" 화면으로 넘어가 입력칸 없이 SPACE 를
+    # 기다린다. 입력칸이 없을 때만 보내므로 답에 공백이 섞일 일은 없다.
+    if not has_spell_input(driver):
+        try:
+            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.SPACE)
+            return True
+        except Exception:
+            pass
     return False
 
 
 def wait_for_next_card(
-    driver, da_k, previous_question="", previous_card_id="", timeout=10
+    driver, da_e, da_k, examples, previous_index=-1, previous_card_id="", timeout=10
 ):
     end_time = time.time() + timeout
     while time.time() < end_time:
         card_id = current_card_id(driver)
-        question = get_visible_korean_prompt(driver, da_k)
-        if question and has_spell_input(driver):
+        index = find_prompt_card(driver, da_e, da_k, examples)
+        if index > 0 and has_spell_input(driver):
             # data-idx 가 있으면 그걸로 판단한다. 뜻이 같은 카드가 이어져도
-            # 카드가 넘어간 걸 알아채고, 반대로 같은 카드에서 문제 텍스트만
-            # 잠깐 달라 보여도 속지 않는다.
+            # 카드가 넘어간 걸 알아채고, 반대로 같은 카드에서 보이는 글자만
+            # 잠깐 달라져도 속지 않는다.
             if card_id and previous_card_id:
                 moved = card_id != previous_card_id
             else:
-                moved = question != previous_question
-            if not previous_question and not previous_card_id:
+                moved = index != previous_index
+            if previous_index < 0 and not previous_card_id:
                 moved = True
             if moved:
-                return question, card_id
+                return index, card_id
         # 카드 전환 중에는 입력칸과 문제가 동시에 잠시 사라진다.
         # 이때 확인/Enter를 다시 보내면 다음 카드를 건너뛸 수 있으므로 기다린다.
         time.sleep(0.35)
-    return "", previous_card_id
+    return -1, previous_card_id
 
 
 def submit_answer(driver, answer):
@@ -634,8 +657,11 @@ class SpellingLearning:
     def run(self, num_d: int, word_d: list) -> None:
         driver = self.driver
         wait = WebDriverWait(driver, 15)
-        da_e, da_k, _ = word_d
-        prompt_terms = [*da_k, *da_e]
+        da_e, da_k, details = word_d
+        examples = [
+            detail.get("example", "") if isinstance(detail, dict) else ""
+            for detail in details
+        ]
 
         if not enter_spell(driver):
             raise TimeoutException("스펠학습 페이지에 진입하지 못했습니다.")
@@ -651,35 +677,38 @@ class SpellingLearning:
             card_count = max(1, num_d - 1)
             return run_sentence_spell(driver, card_count, da_e, da_k)
         time.sleep(1)
-        last_question = ""
+        last_index = -1
         last_card_id = ""
         completed = 0
 
         for _ in range(1, num_d):
             try:
-                question, card_id = wait_for_next_card(
-                    driver, prompt_terms, last_question, last_card_id
+                index, card_id = wait_for_next_card(
+                    driver, da_e, da_k, examples, last_index, last_card_id
                 )
-                if not question:
-                    # 카드가 스스로 넘어가지 않고 "다음카드"를 기다리는 화면이
-                    # 있다. 한 번 눌러 보고 다시 기다린다.
+                if index < 0:
+                    # 카드가 스스로 넘어가지 않는 화면이 둘 있다. "다음카드"
+                    # 버튼을 기다리는 화면과, 틀린 뒤 SPACE 를 기다리는
+                    # "모르는 카드" 화면이다. 한 번 넘겨 보고 다시 기다린다.
                     if advance_to_next_card(driver):
-                        question, card_id = wait_for_next_card(
-                            driver, prompt_terms, last_question, last_card_id
+                        index, card_id = wait_for_next_card(
+                            driver, da_e, da_k, examples, last_index, last_card_id
                         )
-                answer = get_english_answer(question, da_e, da_k)
+                # 스펠은 언제나 영어 철자를 입력하는 모드다. 화면에서 읽은
+                # 글자를 그대로 답으로 쓰지 않고 카드 앞면에서 꺼낸다.
+                answer = norm_text(da_e[index]) if index > 0 else ""
+                question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
-                if not question or not answer:
+                if not answer:
                     state = driver.execute_script(
                         "return (document.body.innerText || '').slice(-1200);"
                     )
                     raise RuntimeError(
-                        f"스펠 {completed + 1}번째 카드의 문제나 정답을 찾지 "
-                        f"못했습니다: 문제={question!r} 정답={answer!r} "
+                        f"스펠 {completed + 1}번째 카드를 찾지 못했습니다. "
                         f"현재 화면: {state}"
                     )
                 submit_answer(driver, answer)
-                last_question = question
+                last_index = index
                 last_card_id = card_id
                 completed += 1
                 time.sleep(0.5)
