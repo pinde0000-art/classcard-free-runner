@@ -223,6 +223,13 @@ def run(payload):
     class_id, set_id, start, end, mode, amount = validate(payload)
     title = str(payload.get("title") or f"세트 {set_id}")
     mode_name, route, handler_class = MODES[mode]
+    marks = []
+
+    def mark(label, since):
+        marks.append(f"{label} {time.time() - since:.1f}초")
+        return time.time()
+
+    step = time.time()
     with ThreadPoolExecutor(max_workers=1) as executor:
         login_future = executor.submit(create_login_session, get_account())
         driver = make_driver()
@@ -230,17 +237,21 @@ def run(payload):
             authenticated_session = login_future.result(timeout=20)
         except Exception:
             authenticated_session = None
+    step = mark("브라우저", step)
     cards = []
     originals = set()
     try:
         login(driver, authenticated_session)
+        step = mark("로그인", step)
         open_set(driver, set_id, class_id)
+        step = mark("세트 열기", step)
         # 세트 페이지를 방금 띄웠다는 표시. 테스트 모드는 이 페이지를 그대로
         # 쓰면 되는데도 회차 루프에서 같은 주소를 한 번 더 열어 전체 페이지
         # 로딩을 중복으로 하고 있었다.
         set_page_fresh = True
         # 테스트는 진행률을 쓰지 않으므로(항상 0에서 시작) 조회를 생략한다.
         progress = {} if mode_name == "테스트" else read_learning_progress(driver)
+        step = mark("진행률", step)
         current_progress = 0 if mode_name == "테스트" else int(progress.get(mode_name, 0) or 0)
         target_progress = amount * 100
         remaining_rounds = max(
@@ -248,6 +259,7 @@ def run(payload):
             (target_progress - current_progress + 99) // 100,
         )
         cards = read_cards(driver)
+        step = mark("카드 읽기", step)
         if end > len(cards):
             raise ValueError(f"카드 번호는 1부터 {len(cards)}까지만 선택할 수 있습니다.")
         originals = {card["card_id"] for card in cards if card["favorite"]}
@@ -264,7 +276,7 @@ def run(payload):
         card_type = "+".join(label for label, _ in groups)
         print(
             f"선택: {title} / 카드 {start}~{end} / {mode_name} {target_progress}% "
-            f"(준비 {time.time() - started_at:.1f}초)",
+            f"(준비 {time.time() - started_at:.1f}초 = " + ", ".join(marks) + ")",
             flush=True,
         )
         print(f"카드 종류: {card_type}", flush=True)

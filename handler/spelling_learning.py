@@ -119,16 +119,18 @@ def visible_texts(driver, selector):
     )
 
 
+# 답을 맞힌 카드는 .current 를 유지한 채 .deactive 가 붙는다. 이걸 거르지
+# 않으면 방금 푼 카드의 입력칸과 문제를 계속 다시 읽어서 제자리에 멈춘다.
+CARD_SELECTORS = [
+    ".CardItem.current.showing:not(.deactive)",
+    ".CardItem.current:not(.deactive)",
+    ".CardItem.active:not(.deactive)",
+    ".CardItem.showing:not(.deactive):not(.previous):not(.next)",
+]
+
+
 def current_card_element(driver):
-    # 답을 맞힌 카드는 .current 를 유지한 채 .deactive 가 붙는다. 이걸 거르지
-    # 않으면 방금 푼 카드의 입력칸과 문제를 계속 다시 읽어서 제자리에 멈춘다.
-    selectors = [
-        ".CardItem.current.showing:not(.deactive)",
-        ".CardItem.current:not(.deactive)",
-        ".CardItem.active:not(.deactive)",
-        ".CardItem.showing:not(.deactive):not(.previous):not(.next)",
-    ]
-    for selector in selectors:
+    for selector in CARD_SELECTORS:
         for element in driver.find_elements(By.CSS_SELECTOR, selector):
             try:
                 if element.is_displayed() and element.rect["width"] > 0:
@@ -499,48 +501,84 @@ def click_confirm(driver):
     return False
 
 
-def prompt_blocks(driver):
-    blocks = []
+TEXT_SELECTORS = [
+    ".CardItem.showing .card-bottom .text-normal",
+    ".CardItem.showing .card-top .text-normal",
+    ".CardItem.showing .card-bottom",
+    ".CardItem.showing .card-top",
+    "#wrapper-learn .CardItem .text-normal",
+    "#wrapper-learn .CardItem .card-bottom",
+    "#wrapper-learn .CardItem .card-top",
+    "#wrapper-learn .spell-question",
+    "#wrapper-learn .question",
+]
 
-    # 첫 문제 이후에는 활성 카드에서 "showing" 클래스가 빠질 수 있다.
-    # 현재 입력칸이 속한 카드를 기준으로 읽으면 카드 클래스 변경과 무관하게 동작한다.
+# 카드가 넘어가길 기다리는 동안 화면 상태를 한 번에 읽는다. 예전에는 카드
+# 번호, 입력칸 존재 여부, 화면 글자를 따로 물어보느라 폴링 한 번에 브라우저
+# 왕복이 서른 번 넘게 났다. 왕복 자체가 대기 간격만큼 걸려서, 카드마다
+# 쓸데없이 몇 초씩 새어 나갔다.
+CARD_STATE_JS = """
+const cardSelectors = arguments[0], textSelectors = arguments[1];
+const visible = el => {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden'
+        && rect.width > 0 && rect.height > 0;
+};
+let card = null;
+for (const selector of cardSelectors) {
+    for (const el of document.querySelectorAll(selector)) {
+        if (visible(el)) { card = el; break; }
+    }
+    if (card) break;
+}
+const inputClass = window.cheat_input_class || '';
+const inputSelectors = (inputClass ? ['input.' + inputClass] : [])
+    .concat(["input[name='input_answer']", "input[type='text']", 'input']);
+const findInput = root => {
+    if (!root) return null;
+    for (const selector of inputSelectors) {
+        for (const el of root.querySelectorAll(selector)) {
+            if (visible(el) && !el.disabled && !el.readOnly) return el;
+        }
+    }
+    return null;
+};
+let input = findInput(card);
+if (!input) {
+    for (const other of
+            document.querySelectorAll('#wrapper-learn .CardItem:not(.deactive)')) {
+        input = findInput(other);
+        if (input) break;
+    }
+}
+const blocks = [];
+if (card) blocks.push(card.innerText || card.textContent || '');
+for (const selector of textSelectors) {
+    for (const el of document.querySelectorAll(selector)) {
+        if (visible(el)) blocks.push(el.innerText || el.textContent || '');
+    }
+}
+return {
+    cardId: card ? (card.getAttribute('data-idx') || '') : '',
+    hasInput: !!input,
+    blocks: blocks.filter(Boolean),
+};
+"""
+
+EMPTY_STATE = {"cardId": "", "hasInput": False, "blocks": []}
+
+
+def read_card_state(driver):
     try:
-        input_el = get_spell_input(driver)
-        active_text = driver.execute_script(
-            """
-            const input = arguments[0];
-            const card = input.closest('.CardItem') || input.closest('#wrapper-learn');
-            if (!card) return '';
-            const style = window.getComputedStyle(card);
-            const rect = card.getBoundingClientRect();
-            if (style.display === 'none' || style.visibility === 'hidden'
-                    || rect.width === 0 || rect.height === 0) return '';
-            return card.innerText || card.textContent || '';
-            """,
-            input_el,
-        )
-        if active_text:
-            blocks.append(active_text)
-    except (TimeoutException, StaleElementReferenceException):
-        pass
-
-    selectors = [
-        ".CardItem.showing .card-bottom .text-normal",
-        ".CardItem.showing .card-top .text-normal",
-        ".CardItem.showing .card-bottom",
-        ".CardItem.showing .card-top",
-        "#wrapper-learn .CardItem .text-normal",
-        "#wrapper-learn .CardItem .card-bottom",
-        "#wrapper-learn .CardItem .card-top",
-        "#wrapper-learn .spell-question",
-        "#wrapper-learn .question",
-    ]
-    for selector in selectors:
-        blocks.extend(visible_texts(driver, selector))
-    return blocks
+        state = driver.execute_script(CARD_STATE_JS, CARD_SELECTORS, TEXT_SELECTORS)
+    except Exception:
+        return dict(EMPTY_STATE)
+    return state or dict(EMPTY_STATE)
 
 
-def find_prompt_card(driver, da_e, da_k, examples):
+def find_prompt_card(blocks, da_e, da_k, examples):
     """화면에 떠 있는 카드가 몇 번인지 찾는다. 정답 자체는 고르지 않는다.
 
     스펠은 언제나 영어 철자를 입력하는 모드다. 예전에는 화면에서 읽어낸
@@ -548,7 +586,6 @@ def find_prompt_card(driver, da_e, da_k, examples):
     없고 예문만 보이는 카드에서는 예문 속 영어 단어가 문제로 잡혀 한국어를
     입력해 버렸다. 그래서 카드 번호만 찾고, 정답은 호출부가 da_e 에서 꺼낸다.
     """
-    blocks = prompt_blocks(driver)
     lines = []
     joined = ""
     for block in blocks:
@@ -609,10 +646,11 @@ def wait_for_next_card(
     driver, da_e, da_k, examples, previous_index=-1, previous_card_id="", timeout=10
 ):
     end_time = time.time() + timeout
-    while time.time() < end_time:
-        card_id = current_card_id(driver)
-        index = find_prompt_card(driver, da_e, da_k, examples)
-        if index > 0 and has_spell_input(driver):
+    while True:
+        state = read_card_state(driver)
+        card_id = state.get("cardId") or ""
+        index = find_prompt_card(state.get("blocks") or [], da_e, da_k, examples)
+        if index > 0 and state.get("hasInput"):
             # data-idx 가 있으면 그걸로 판단한다. 뜻이 같은 카드가 이어져도
             # 카드가 넘어간 걸 알아채고, 반대로 같은 카드에서 보이는 글자만
             # 잠깐 달라져도 속지 않는다.
@@ -624,10 +662,12 @@ def wait_for_next_card(
                 moved = True
             if moved:
                 return index, card_id
+        if time.time() >= end_time:
+            return -1, previous_card_id
         # 카드 전환 중에는 입력칸과 문제가 동시에 잠시 사라진다.
         # 이때 확인/Enter를 다시 보내면 다음 카드를 건너뛸 수 있으므로 기다린다.
-        time.sleep(0.35)
-    return -1, previous_card_id
+        # 상태 읽기가 왕복 한 번이라 짧게 돌아도 부담이 없다.
+        time.sleep(0.08)
 
 
 def submit_answer(driver, answer):
@@ -638,10 +678,15 @@ def submit_answer(driver, answer):
             input_el.click()
             input_el.send_keys(Keys.CONTROL, "a")
             input_el.send_keys(answer)
-            time.sleep(0.15)
             if not click_confirm(driver):
                 input_el.send_keys(Keys.ENTER)
-            time.sleep(0.75)
+            # 채점이 끝나면 입력칸이 사라지거나 카드가 넘어간다. 예전에는
+            # 무조건 0.75초를 잤는데, 대부분 그 전에 끝나 있었다.
+            end_time = time.time() + 0.8
+            while time.time() < end_time:
+                if not read_card_state(driver).get("hasInput"):
+                    break
+                time.sleep(0.05)
             click_confirm(driver)
             return
         except StaleElementReferenceException as error:
@@ -676,7 +721,7 @@ class SpellingLearning:
         if learning_mode == "sentence":
             card_count = max(1, num_d - 1)
             return run_sentence_spell(driver, card_count, da_e, da_k)
-        time.sleep(1)
+        time.sleep(0.3)
         last_index = -1
         last_card_id = ""
         completed = 0
@@ -711,7 +756,6 @@ class SpellingLearning:
                 last_index = index
                 last_card_id = card_id
                 completed += 1
-                time.sleep(0.5)
             except Exception as error:
                 print(f"스펠 학습 중 오류가 발생했습니다: {error}")
                 raise
