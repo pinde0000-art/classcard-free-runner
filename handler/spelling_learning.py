@@ -119,40 +119,75 @@ def visible_texts(driver, selector):
     )
 
 
+def current_card_element(driver):
+    # 답을 맞힌 카드는 .current 를 유지한 채 .deactive 가 붙는다. 이걸 거르지
+    # 않으면 방금 푼 카드의 입력칸과 문제를 계속 다시 읽어서 제자리에 멈춘다.
+    selectors = [
+        ".CardItem.current.showing:not(.deactive)",
+        ".CardItem.current:not(.deactive)",
+        ".CardItem.active:not(.deactive)",
+        ".CardItem.showing:not(.deactive):not(.previous):not(.next)",
+    ]
+    for selector in selectors:
+        for element in driver.find_elements(By.CSS_SELECTOR, selector):
+            try:
+                if element.is_displayed() and element.rect["width"] > 0:
+                    return element
+            except Exception:
+                continue
+    return None
+
+
+def current_card_id(driver):
+    # 뜻이 같은 카드가 두 장이면 문제 텍스트만으로는 카드가 넘어갔는지 알 수
+    # 없다. 리콜 학습처럼 data-idx 로 구분한다. 속성이 없으면 빈 문자열을
+    # 돌려주고, 그때는 호출부가 텍스트 비교로 되돌아간다.
+    card = current_card_element(driver)
+    if card is None:
+        return ""
+    try:
+        return card.get_attribute("data-idx") or ""
+    except StaleElementReferenceException:
+        return ""
+
+
+def usable_input(element):
+    try:
+        if not element.is_displayed() or not element.is_enabled():
+            return False
+        return not element.get_attribute("readonly")
+    except StaleElementReferenceException:
+        return False
+
+
 def get_spell_input(driver):
     input_class = driver.execute_script("return window.cheat_input_class || ''; ")
-    active_cards = driver.find_elements(
-        By.CSS_SELECTOR,
-        ".CardItem.current.showing, .CardItem.current",
-    )
-    active_selectors = []
+    selectors = []
     if input_class:
-        active_selectors.append(f"input.{input_class}")
-    active_selectors.extend([
+        selectors.append(f"input.{input_class}")
+    selectors.extend([
         "input[name='input_answer']",
         "input[type='text']",
         "input",
     ])
-    for card in active_cards:
-        try:
-            if not card.is_displayed() or card.rect["width"] <= 0:
-                continue
-            for selector in active_selectors:
-                for element in card.find_elements(By.CSS_SELECTOR, selector):
-                    if element.is_displayed() and element.is_enabled():
-                        return element
-        except StaleElementReferenceException:
-            continue
 
-    selectors = [
-        "#wrapper-learn .CardItem.showing input[type='text']",
-        "#wrapper-learn .CardItem.showing input",
-        "#wrapper-learn input[type='text']",
-        "#wrapper-learn input",
-    ]
+    card = current_card_element(driver)
+    if card is not None:
+        for selector in selectors:
+            try:
+                for element in card.find_elements(By.CSS_SELECTOR, selector):
+                    if usable_input(element):
+                        return element
+            except StaleElementReferenceException:
+                break
+
+    # 활성 카드를 못 찾았을 때만 학습 영역 전체를 훑는다. 이때도 이미 답한
+    # 카드는 건너뛴다.
     for selector in selectors:
-        for element in driver.find_elements(By.CSS_SELECTOR, selector):
-            if element.is_displayed() and element.is_enabled():
+        for element in driver.find_elements(
+            By.CSS_SELECTOR, f"#wrapper-learn .CardItem:not(.deactive) {selector}"
+        ):
+            if usable_input(element):
                 return element
     raise TimeoutException("spell input not found")
 
@@ -528,29 +563,51 @@ def get_english_answer(question, da_e, da_k):
     return ""
 
 
-def wait_for_spell_prompt(driver, da_k, timeout=10, previous_question=""):
+def advance_to_next_card(driver):
+    # 단어 스펠도 문장 스펠처럼 "다음카드" 버튼이 떠 있을 때가 있다. 버튼이
+    # 없으면 페이지가 알아서 넘어간 것이므로 아무것도 하지 않는다. 입력칸에
+    # 포커스가 있는 상태라 스페이스/엔터를 대신 보내지는 않는다.
+    for selector in (
+        "#wrapper-learn .btnNextCard",
+        "#wrapper-learn .btn-next-card",
+        "#wrapper-learn [class*='next-card']",
+    ):
+        for element in driver.find_elements(By.CSS_SELECTOR, selector):
+            try:
+                if element.is_displayed() and element.is_enabled():
+                    driver.execute_script("arguments[0].click();", element)
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+def wait_for_next_card(
+    driver, da_k, previous_question="", previous_card_id="", timeout=10
+):
     end_time = time.time() + timeout
     while time.time() < end_time:
+        card_id = current_card_id(driver)
         question = get_visible_korean_prompt(driver, da_k)
-        if question and question != previous_question and has_spell_input(driver):
-            return question
+        if question and has_spell_input(driver):
+            # data-idx 가 있으면 그걸로 판단한다. 뜻이 같은 카드가 이어져도
+            # 카드가 넘어간 걸 알아채고, 반대로 같은 카드에서 문제 텍스트만
+            # 잠깐 달라 보여도 속지 않는다.
+            if card_id and previous_card_id:
+                moved = card_id != previous_card_id
+            else:
+                moved = question != previous_question
+            if not previous_question and not previous_card_id:
+                moved = True
+            if moved:
+                return question, card_id
         # 카드 전환 중에는 입력칸과 문제가 동시에 잠시 사라진다.
         # 이때 확인/Enter를 다시 보내면 다음 카드를 건너뛸 수 있으므로 기다린다.
         time.sleep(0.35)
-    return ""
+    return "", previous_card_id
 
 
-def wait_until_prompt_changes(driver, da_k, previous_question, timeout=6):
-    end_time = time.time() + timeout
-    while time.time() < end_time:
-        question = get_visible_korean_prompt(driver, da_k)
-        if question and question != previous_question and has_spell_input(driver):
-            return question
-        time.sleep(0.35)
-    return ""
-
-
-def submit_answer(driver, answer, da_k=None, question=""):
+def submit_answer(driver, answer):
     last_error = None
     for _ in range(3):
         try:
@@ -563,8 +620,6 @@ def submit_answer(driver, answer, da_k=None, question=""):
                 input_el.send_keys(Keys.ENTER)
             time.sleep(0.75)
             click_confirm(driver)
-            if da_k is not None:
-                wait_until_prompt_changes(driver, da_k, question)
             return
         except StaleElementReferenceException as error:
             last_error = error
@@ -597,20 +652,35 @@ class SpellingLearning:
             return run_sentence_spell(driver, card_count, da_e, da_k)
         time.sleep(1)
         last_question = ""
+        last_card_id = ""
         completed = 0
 
         for _ in range(1, num_d):
             try:
-                question = wait_for_spell_prompt(
-                    driver, prompt_terms, previous_question=last_question
+                question, card_id = wait_for_next_card(
+                    driver, prompt_terms, last_question, last_card_id
                 )
+                if not question:
+                    # 카드가 스스로 넘어가지 않고 "다음카드"를 기다리는 화면이
+                    # 있다. 한 번 눌러 보고 다시 기다린다.
+                    if advance_to_next_card(driver):
+                        question, card_id = wait_for_next_card(
+                            driver, prompt_terms, last_question, last_card_id
+                        )
                 answer = get_english_answer(question, da_e, da_k)
                 print(f"문제: {question!r} / 입력: {answer!r}")
                 if not question or not answer:
-                    print("스펠 문제 또는 정답을 찾지 못해서 중단합니다.")
-                    break
-                submit_answer(driver, answer, da_k=prompt_terms, question=question)
+                    state = driver.execute_script(
+                        "return (document.body.innerText || '').slice(-1200);"
+                    )
+                    raise RuntimeError(
+                        f"스펠 {completed + 1}번째 카드의 문제나 정답을 찾지 "
+                        f"못했습니다: 문제={question!r} 정답={answer!r} "
+                        f"현재 화면: {state}"
+                    )
+                submit_answer(driver, answer)
                 last_question = question
+                last_card_id = card_id
                 completed += 1
                 time.sleep(0.5)
             except Exception as error:
