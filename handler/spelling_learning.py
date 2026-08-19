@@ -701,7 +701,10 @@ def submit_answer(driver, answer):
     for _ in range(3):
         try:
             input_el = get_spell_input(driver)
-            input_el.click()
+            # 정답을 맞히면 #wrapper-learn 에 success 가 붙으면서 잠깐 화면을
+            # 덮는다. 그 위를 클릭하면 "element click intercepted" 로 죽는다.
+            # 포커스는 오버레이와 무관하게 들어가므로 클릭하지 않는다.
+            driver.execute_script("arguments[0].focus();", input_el)
             input_el.send_keys(Keys.CONTROL, "a")
             input_el.send_keys(answer)
             if not click_confirm(driver):
