@@ -832,7 +832,9 @@ def press_space(driver):
 # 뜨는 문구로 좁힌다.
 COMPLETE_MARKERS = (
     "구간 학습이 완료",
+    "학습이 완료되었습니다",
     "새로 학습하기",
+    "Clear!!",
 )
 
 
