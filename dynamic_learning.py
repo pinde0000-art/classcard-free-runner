@@ -99,6 +99,28 @@ def click_visible_text(driver, words):
     return bool(driver.execute_script(script, words))
 
 
+def click_challenge(driver, round_target):
+    """"200% 도전" 같은 다음 회차 버튼을 누른다."""
+    return driver.execute_script(
+        r"""
+        const wanted = arguments[0];
+        const candidates = Array.from(document.querySelectorAll(
+          'a, button, [role="button"], [onclick], .btn'
+        ));
+        const target = candidates.find(el => {
+          const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+          const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+          return text.includes(wanted) && style.display !== 'none'
+            && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        });
+        if (!target) return false;
+        target.click();
+        return true;
+        """,
+        f"{round_target}% 도전",
+    )
+
+
 def prepare_round(driver, round_target):
     body = driver.execute_script("return document.body.innerText || '';")
     clear_values = [
@@ -122,24 +144,7 @@ def prepare_round(driver, round_target):
         return False
 
     challenge_text = f"{round_target}% 도전"
-    challenge_clicked = driver.execute_script(
-        r"""
-        const wanted = arguments[0];
-        const candidates = Array.from(document.querySelectorAll(
-          'a, button, [role="button"], [onclick], .btn'
-        ));
-        const target = candidates.find(el => {
-          const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-          const style = getComputedStyle(el), rect = el.getBoundingClientRect();
-          return text.includes(wanted) && style.display !== 'none'
-            && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
-        });
-        if (!target) return false;
-        target.click();
-        return true;
-        """,
-        challenge_text,
-    )
+    challenge_clicked = click_challenge(driver, round_target)
     print(
         f"회차 준비: 화면 Clear {clear_progress}% / 목표 {round_target}% / "
         f"'{challenge_text}' 클릭 {challenge_clicked}",
@@ -360,6 +365,24 @@ def run(payload):
                         num_d=len(group) + 1,
                         word_d=data,
                     )
+                    # 앞 회차에서 틀린 카드가 큐에 남아 있으면 그것만 먼저
+                    # 나오고 끝난다. 그게 비워져야 완료 화면과 "200% 도전"이
+                    # 뜨므로, 여기서 눌러 이번 회차를 이어서 돌린다.
+                    for _ in range(2):
+                        if completed >= len(group):
+                            break
+                        if not click_challenge(driver, round_target):
+                            break
+                        print(
+                            f"남은 카드를 비운 뒤 {round_target}% 도전을 눌러 "
+                            f"이어서 진행합니다.",
+                            flush=True,
+                        )
+                        time.sleep(1.2)
+                        completed = handler_class(driver).run(
+                            num_d=len(group) + 1,
+                            word_d=data,
+                        )
                 print(
                     f"{label} {mode_name} {round_number}/{remaining_rounds}회 완료: {completed}/{len(group)}",
                     flush=True,
