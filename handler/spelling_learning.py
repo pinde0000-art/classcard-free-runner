@@ -773,15 +773,9 @@ def advance_to_next_card(driver):
         return True
     # 단어 스펠도 문장 스펠처럼 "다음카드" 버튼이 떠 있을 때가 있다. 버튼이
     # 없으면 페이지가 알아서 넘어간 것이므로 아무것도 하지 않는다.
-    for selector in (
-        "#wrapper-learn .btnNextCard",
-        "#wrapper-learn .btn-next-card",
-        # 틀린 카드 뒤에 뜨는 "나중에 한번 더". 클래스가 btn-short-change-next
-        # 라 next-card 만 찾던 선택자에 걸리지 않아 여기서 멈춰 있었다.
-        "#wrapper-learn .btn-short-change-next",
-        "#wrapper-learn [class*='change-next']",
-        "#wrapper-learn [class*='next-card']",
-    ):
+    # 틀린 카드 뒤에 뜨는 "나중에 한번 더" 는 클래스가 btn-short-change-next
+    # 라, next-card 만 찾던 선택자에 걸리지 않아 여기서 멈춰 있었다.
+    for selector in ADVANCE_SELECTORS:
         for element in driver.find_elements(By.CSS_SELECTOR, selector):
             try:
                 if element.is_displayed() and element.is_enabled():
@@ -841,36 +835,37 @@ def press_space(driver):
         return False
 
 
-# "100% Clear" 같은 진행률 배지는 회차 내내 화면에 붙어 있다. 그걸 완료로
-# 보면 2회차가 첫 카드도 받기 전에 끝나 버린다. 구간이 실제로 끝났을 때만
-# 뜨는 문구로 좁힌다.
-COMPLETE_MARKERS = (
-    "구간 학습이 완료",
-    "학습이 완료되었습니다",
-    "새로 학습하기",
-    "Clear!!",
+ADVANCE_SELECTORS = (
+    "#wrapper-learn .btnNextCard",
+    "#wrapper-learn .btn-next-card",
+    "#wrapper-learn .btn-short-change-next",
+    "#wrapper-learn [class*='change-next']",
+    "#wrapper-learn [class*='next-card']",
 )
 
 
 def section_complete(driver):
-    """사이트가 이번 구간의 카드를 다 냈는지 본다.
+    """더 이상 할 수 있는 게 없는지 본다.
 
-    화면 위쪽 "17 | 24" 카운터가 가장 정확하다. 문구만 보면 1회차가 끝났을
-    때 남는 "100% Clear!!" 와 목표에 도달한 "200% Clear!!" 를 구분하지
-    못해서, 2회차가 몇 장 만에 끝나 버린다.
+    화면 글자로는 회차가 끝났는지 알 수 없다. 1회차를 마치면 "100% Clear!!"
+    와 "학습이 완료되었습니다" 가 그대로 남고, 카운터 "24 | 24" 도 회차가
+    아니라 세트 전체의 아는 카드 수라 2회차 내내 24/24 다. 둘 중 무엇을 봐도
+    2회차가 몇 장 만에 끝나 버렸다.
+
+    그래서 글자를 읽지 않는다. 넣을 입력칸도, 넘길 버튼도, 닫을 모달도 없을
+    때만 끝난 것으로 본다.
     """
     state = read_card_state(driver)
-    if state.get("hasInput"):
+    if state.get("hasInput") or state.get("modalText"):
         return False
-    known = state.get("knownCount", -1)
-    total = state.get("totalCount", -1)
-    if known >= 0 and total > 0:
-        return known >= total
-    try:
-        text = driver.execute_script("return document.body.innerText || '';") or ""
-    except Exception:
-        return False
-    return any(marker in text for marker in COMPLETE_MARKERS)
+    for selector in ADVANCE_SELECTORS:
+        for element in driver.find_elements(By.CSS_SELECTOR, selector):
+            try:
+                if element.is_displayed() and element.is_enabled():
+                    return False
+            except Exception:
+                continue
+    return True
 
 
 def visible_controls(driver):
