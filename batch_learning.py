@@ -106,14 +106,6 @@ def install_session_cookies(driver, session):
 
 def login(driver, authenticated_session=None):
     account = get_account()
-    # 어느 자격 증명으로 시도하는지 가려서 남긴다. 로그인이 계속 실패할 때
-    # 값이 잘못 들어갔는지 아이디 앞 두 글자와 길이로 구분할 수 있다.
-    _id = str(account.get("id") or "")
-    _pw = str(account.get("pw") or "")
-    log(
-        f"로그인 시도: 아이디 {_id[:2]}{'*' * max(0, len(_id) - 2)}"
-        f"({len(_id)}자) / 비밀번호 {len(_pw)}자"
-    )
 
     # Cloud Chrome can miss the site's client-side login redirect. Create the
     # authenticated session over HTTP and transfer its cookies to Chrome first.
