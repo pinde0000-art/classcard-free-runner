@@ -606,6 +606,18 @@ return {
         const modal = document.querySelector('.modal.in, .modal.show');
         return modal && visible(modal) ? (modal.innerText || '') : '';
     })(),
+    // 화면 위쪽의 "17 | 24" 카운터. 구간이 끝났는지는 문구보다 이게 정확하다.
+    // "100% Clear!!" 와 "200% Clear!!" 는 글자만으로 구분되지 않는다.
+    knownCount: (() => {
+        const el = document.querySelector('.known_count');
+        const value = el ? parseInt((el.innerText || '').trim(), 10) : NaN;
+        return Number.isNaN(value) ? -1 : value;
+    })(),
+    totalCount: (() => {
+        const el = document.querySelector('.total_count');
+        const value = el ? parseInt((el.innerText || '').trim(), 10) : NaN;
+        return Number.isNaN(value) ? -1 : value;
+    })(),
     blocks: blocks.filter(Boolean),
 };
 """
@@ -617,6 +629,8 @@ EMPTY_STATE = {
     "cardText": "",
     "waiting": False,
     "answerText": "",
+    "knownCount": -1,
+    "totalCount": -1,
     "blocks": [],
 }
 
@@ -841,13 +855,17 @@ COMPLETE_MARKERS = (
 def section_complete(driver):
     """사이트가 이번 구간의 카드를 다 냈는지 본다.
 
-    이어서 학습하면 이미 외운 카드는 다시 나오지 않는다. 71% 에서 시작하면
-    남은 몇 장만 출제되고 끝나는데, 그걸 "카드를 찾지 못했다"고 오류로
-    처리하고 있었다. 반대로 아직 풀 카드가 남아 있는데 끝났다고 보면 회차가
-    통째로 날아가므로, 입력칸이 없는 것까지 확인한다.
+    화면 위쪽 "17 | 24" 카운터가 가장 정확하다. 문구만 보면 1회차가 끝났을
+    때 남는 "100% Clear!!" 와 목표에 도달한 "200% Clear!!" 를 구분하지
+    못해서, 2회차가 몇 장 만에 끝나 버린다.
     """
-    if has_spell_input(driver):
+    state = read_card_state(driver)
+    if state.get("hasInput"):
         return False
+    known = state.get("knownCount", -1)
+    total = state.get("totalCount", -1)
+    if known >= 0 and total > 0:
+        return known >= total
     try:
         text = driver.execute_script("return document.body.innerText || '';") or ""
     except Exception:
