@@ -600,6 +600,12 @@ return {
         const done = document.querySelector('.CardItem.current.deactive');
         return done ? (done.innerText || done.textContent || '') : '';
     })(),
+    // 대소문자 오류 등은 모달로 뜬다. 이게 화면을 덮고 있으면 입력칸을
+    // 아예 찾을 수 없어 카드를 못 찾은 것처럼 보인다.
+    modalText: (() => {
+        const modal = document.querySelector('.modal.in, .modal.show');
+        return modal && visible(modal) ? (modal.innerText || '') : '';
+    })(),
     blocks: blocks.filter(Boolean),
 };
 """
@@ -621,6 +627,46 @@ def shown_answer(text):
     """채점 화면이 알려주는 정답 철자를 꺼낸다."""
     match = ANSWER_PATTERN.search(text or "")
     return norm_text(match.group(1)) if match else ""
+
+
+CASE_MODAL_HINT = "대소문자"
+MODAL_BUTTON_TEXTS = {"알겠습니다!", "알겠습니다", "확인", "닫기", "네"}
+
+
+def case_modal_answer(text):
+    """'대소문자 틀림!' 모달이 알려주는 올바른 철자를 꺼낸다.
+
+    모달은 이렇게 생겼다:
+        대소문자 틀림!
+        Fortunately
+        알겠습니다!
+    """
+    lines = [norm_text(line) for line in (text or "").splitlines()]
+    lines = [line for line in lines if line]
+    for position, line in enumerate(lines):
+        if CASE_MODAL_HINT in line:
+            for candidate in lines[position + 1:]:
+                if candidate in MODAL_BUTTON_TEXTS:
+                    continue
+                return candidate
+    return ""
+
+
+def dismiss_modal(driver):
+    for selector in (
+        ".modal.in .btn-ok",
+        ".modal.show .btn-ok",
+        ".modal.in .btn-primary",
+        ".modal.show .btn-primary",
+    ):
+        for element in driver.find_elements(By.CSS_SELECTOR, selector):
+            try:
+                if element.is_displayed() and element.is_enabled():
+                    driver.execute_script("arguments[0].click();", element)
+                    return True
+            except Exception:
+                continue
+    return False
 
 
 CARD_TEXT_JS = """
@@ -708,6 +754,9 @@ def match_blocks(blocks, da_e, da_k, examples):
 
 
 def advance_to_next_card(driver):
+    # 모달이 떠 있으면 아무것도 못 누른다. 먼저 닫는다.
+    if dismiss_modal(driver):
+        return True
     # 단어 스펠도 문장 스펠처럼 "다음카드" 버튼이 떠 있을 때가 있다. 버튼이
     # 없으면 페이지가 알아서 넘어간 것이므로 아무것도 하지 않는다.
     for selector in (
@@ -975,6 +1024,23 @@ class SpellingLearning:
                 # 채점 결과를 확인한다. 예전에는 넣기만 하고 넘어가서, 전부
                 # 틀려도 완료라고 보고했다. 클래스카드는 맞힌 카드만 진행률에
                 # 반영하므로 그러면 "성공했는데 저장이 안 되는" 상태가 된다.
+                # 대소문자가 틀리면 채점되지 않고 모달이 뜬다. 이 모달이
+                # 화면을 덮고 있는 동안에는 입력칸을 찾을 수 없어서, 그대로
+                # 두면 카드를 못 찾았다며 멈춘다. 모달은 올바른 철자를 직접
+                # 알려주므로 닫고 같은 카드를 다시 맞히면 된다.
+                modal_text = read_card_state(driver).get("modalText") or ""
+                if CASE_MODAL_HINT in modal_text:
+                    fixed = case_modal_answer(modal_text)
+                    dismiss_modal(driver)
+                    rejected += 1
+                    if fixed:
+                        corrections[index] = fixed
+                        print(f"  대소문자 틀림: {fixed!r} 로 다시 넣습니다.")
+                    # 카드가 그대로 남아 있으므로 같은 카드를 다시 받는다.
+                    last_index = -1
+                    last_card_id = ""
+                    continue
+
                 site_answer = shown_answer(wait_for_grade(driver, card_id))
                 if site_answer and site_answer != answer:
                     # 사이트가 알려준 철자가 이 카드의 정답이다. 틀린 카드는
@@ -988,6 +1054,8 @@ class SpellingLearning:
                 else:
                     accepted.add(index)
             except Exception as error:
+                print(f"카드 식별: data-idx {id_hits}회 / 화면 글자 {text_hits}회")
+
                 print(f"스펠 학습 중 오류가 발생했습니다: {error}")
                 raise
 
