@@ -135,6 +135,11 @@ def prepare_round(driver, round_target):
         """,
         challenge_text,
     )
+    print(
+        f"회차 준비: 화면 Clear {clear_progress}% / 목표 {round_target}% / "
+        f"'{challenge_text}' 클릭 {challenge_clicked}",
+        flush=True,
+    )
     if challenge_clicked:
         time.sleep(1)
         return False

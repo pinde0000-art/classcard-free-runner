@@ -1114,7 +1114,11 @@ class SpellingLearning:
         print(f"스펠학습 처리 완료: {completed}/{card_count}")
         if completed < card_count:
             if completed and section_complete(driver):
-                print("사이트가 이번 구간의 카드를 모두 냈습니다.")
+                _state = read_card_state(driver)
+                print(
+                    "사이트가 이번 구간의 카드를 모두 냈습니다 "
+                    f"(카운터 {_state.get('knownCount')}/{_state.get('totalCount')})"
+                )
             else:
                 raise RuntimeError(
                     f"스펠학습이 {completed}/{card_count}에서 중단되었습니다."
