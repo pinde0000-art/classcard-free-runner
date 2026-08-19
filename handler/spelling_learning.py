@@ -623,15 +623,32 @@ def shown_answer(text):
     return norm_text(match.group(1)) if match else ""
 
 
-def wait_for_grade(driver, timeout=3.0):
-    """채점이 끝나 정답이 화면에 뜰 때까지 기다렸다가 그 글자를 돌려준다."""
+CARD_TEXT_JS = """
+const el = document.querySelector('.CardItem[data-idx="' + arguments[0] + '"]');
+return el ? (el.innerText || el.textContent || '') : '';
+"""
+
+
+def wait_for_grade(driver, card_id, timeout=3.0):
+    """방금 답한 그 카드의 채점 글자를 읽는다.
+
+    답을 보여주는 화면에는 앞서 푼 카드들도 함께 남아 있다. 아무 .deactive
+    나 집으면 남의 카드 정답을 읽어 엉뚱한 철자를 기억하고, 그 값으로 다시
+    답해서 오답이 번진다. 그래서 data-idx 로 카드를 지정해 읽는다.
+    """
+    if not card_id:
+        return ""
     end_time = time.time() + timeout
+    text = ""
     while time.time() < end_time:
-        state = read_card_state(driver)
-        if state.get("waiting"):
-            return state.get("answerText") or ""
+        try:
+            text = driver.execute_script(CARD_TEXT_JS, card_id) or ""
+        except Exception:
+            text = ""
+        if "정답" in text:
+            return text
         time.sleep(0.05)
-    return ""
+    return text
 
 
 def read_card_state(driver):
@@ -782,7 +799,8 @@ def visible_controls(driver):
 
 
 def wait_for_next_card(
-    driver, da_e, da_k, examples, previous_index=-1, previous_card_id="", timeout=10
+    driver, da_e, da_k, examples, previous_index=-1, previous_card_id="",
+    timeout=10, card_index=None,
 ):
     end_time = time.time() + timeout
     waiting_since = None
@@ -802,13 +820,17 @@ def wait_for_next_card(
             continue
         waiting_since = None
 
-        index = find_prompt_card(
-            state.get("cardText") or "",
-            state.get("blocks") or [],
-            da_e,
-            da_k,
-            examples,
-        )
+        # data-idx 는 세트 페이지에서 읽은 card_id 와 같은 값이다. 짝이
+        # 있으면 글자를 맞춰 볼 것도 없이 그 카드다.
+        index = card_index.get(card_id, -1) if card_index else -1
+        if index < 0:
+            index = find_prompt_card(
+                state.get("cardText") or "",
+                state.get("blocks") or [],
+                da_e,
+                da_k,
+                examples,
+            )
         if index > 0 and state.get("hasInput"):
             # data-idx 가 있으면 그걸로 판단한다. 뜻이 같은 카드가 이어져도
             # 카드가 넘어간 걸 알아채고, 반대로 같은 카드에서 보이는 글자만
@@ -869,6 +891,14 @@ class SpellingLearning:
             detail.get("example", "") if isinstance(detail, dict) else ""
             for detail in details
         ]
+        # 학습 화면의 data-idx 는 세트 페이지에서 읽은 card_id 와 같다.
+        # 이걸로 카드를 특정하면 화면 글자를 맞춰 볼 필요가 없다.
+        card_index = {}
+        for position, detail in enumerate(details):
+            if isinstance(detail, dict) and detail.get("card_id"):
+                card_index[str(detail["card_id"])] = position
+        id_hits = 0
+        text_hits = 0
 
         if not enter_spell(driver):
             raise TimeoutException("스펠학습 페이지에 진입하지 못했습니다.")
@@ -900,7 +930,8 @@ class SpellingLearning:
             budget -= 1
             try:
                 index, card_id = wait_for_next_card(
-                    driver, da_e, da_k, examples, last_index, last_card_id
+                    driver, da_e, da_k, examples, last_index, last_card_id,
+                    card_index=card_index,
                 )
                 # 카드가 스스로 넘어가지 않는 화면이 있다. "다음카드" 버튼을
                 # 기다리는 화면과, 답을 보여주며 SPACE 를 기다리는 화면이다.
@@ -912,7 +943,7 @@ class SpellingLearning:
                         break
                     index, card_id = wait_for_next_card(
                         driver, da_e, da_k, examples, last_index, last_card_id,
-                        timeout=4,
+                        timeout=4, card_index=card_index,
                     )
                 # 스펠은 언제나 영어 철자를 입력하는 모드다. 화면에서 읽은
                 # 글자를 그대로 답으로 쓰지 않고 카드 앞면에서 꺼낸다.
@@ -932,6 +963,11 @@ class SpellingLearning:
                         f"누를 수 있던 것: {visible_controls(driver)} "
                         f"현재 화면: {state}"
                     )
+                if card_index.get(card_id, -1) == index:
+                    id_hits += 1
+                else:
+                    text_hits += 1
+
                 submit_answer(driver, answer)
                 last_index = index
                 last_card_id = card_id
@@ -939,7 +975,7 @@ class SpellingLearning:
                 # 채점 결과를 확인한다. 예전에는 넣기만 하고 넘어가서, 전부
                 # 틀려도 완료라고 보고했다. 클래스카드는 맞힌 카드만 진행률에
                 # 반영하므로 그러면 "성공했는데 저장이 안 되는" 상태가 된다.
-                site_answer = shown_answer(wait_for_grade(driver))
+                site_answer = shown_answer(wait_for_grade(driver, card_id))
                 if site_answer and site_answer != answer:
                     # 사이트가 알려준 철자가 이 카드의 정답이다. 틀린 카드는
                     # 다시 나오므로 그때 이 값으로 넣는다.
@@ -956,6 +992,9 @@ class SpellingLearning:
                 raise
 
         completed = len(accepted)
+
+
+        print(f"카드 식별: data-idx {id_hits}회 / 화면 글자 {text_hits}회")
         if rejected:
             print(f"오답 {rejected}회 (정답 처리 {completed}/{card_count})")
         print(f"스펠학습 처리 완료: {completed}/{card_count}")

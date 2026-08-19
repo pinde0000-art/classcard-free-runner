@@ -39,7 +39,7 @@ def word_data(cards):
     english = [0] + [card["front"] for card in cards]
     korean = [0] + [card["back"] for card in cards]
     details = [0] + [
-        {"back": card["back"], "example": card.get("example", "")}
+        {"card_id": card["card_id"], "back": card["back"], "example": card.get("example", "")}
         for card in cards
     ]
     return [english, korean, details]
