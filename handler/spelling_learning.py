@@ -657,15 +657,61 @@ def advance_to_next_card(driver):
             except Exception:
                 continue
 
-    # 틀린 카드는 "모르는 카드" 화면으로 넘어가 입력칸 없이 SPACE 를
-    # 기다린다. 입력칸이 없을 때만 보내므로 답에 공백이 섞일 일은 없다.
-    if not has_spell_input(driver):
-        try:
-            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.SPACE)
-            return True
-        except Exception:
-            pass
+    # 답을 낸 카드는 정답을 보여주며 SPACE 를 기다린다. 이때 다른 카드의
+    # 입력칸이 화면에 남아 있어서, "입력칸이 없을 때만" 으로 판단하면 영영
+    # 넘기지 못한다. 리콜 학습처럼 답한 카드(.deactive)가 있는지로 본다.
+    answered = driver.find_elements(
+        By.CSS_SELECTOR, ".CardItem.current.deactive, .CardItem.deactive"
+    )
+    if answered or not has_spell_input(driver):
+        return press_space(driver)
     return False
+
+
+def press_space(driver):
+    """SPACE 를 키 이벤트로 보낸다.
+
+    body.send_keys 는 포커스가 있는 곳으로 가므로 입력칸에 공백이 들어갈 수
+    있다. 포커스를 먼저 떼고 document 로 올려보내면 그 위험이 없다.
+    """
+    try:
+        driver.execute_script(
+            """
+            if (document.activeElement && document.activeElement.blur) {
+                document.activeElement.blur();
+            }
+            const target = document.body || document;
+            for (const type of ['keydown', 'keypress', 'keyup']) {
+                target.dispatchEvent(new KeyboardEvent(type, {
+                    key: ' ', code: 'Space', keyCode: 32, which: 32,
+                    bubbles: true, cancelable: true,
+                }));
+            }
+            """
+        )
+        return True
+    except Exception:
+        return False
+
+
+def visible_controls(driver):
+    """실패했을 때 화면에 뭘 누를 수 있었는지 남긴다."""
+    try:
+        return driver.execute_script(
+            """
+            return Array.from(document.querySelectorAll(
+                    '#wrapper-learn a, #wrapper-learn button'))
+                .filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0;
+                })
+                .map(el => ((el.innerText || '').trim() || '(빈칸)')
+                    + ' [' + (el.className || '') + ']')
+                .slice(0, 20);
+            """
+        )
+    except Exception:
+        return []
 
 
 def wait_for_next_card(
@@ -760,14 +806,18 @@ class SpellingLearning:
                 index, card_id = wait_for_next_card(
                     driver, da_e, da_k, examples, last_index, last_card_id
                 )
-                if index < 0:
-                    # 카드가 스스로 넘어가지 않는 화면이 둘 있다. "다음카드"
-                    # 버튼을 기다리는 화면과, 틀린 뒤 SPACE 를 기다리는
-                    # "모르는 카드" 화면이다. 한 번 넘겨 보고 다시 기다린다.
-                    if advance_to_next_card(driver):
-                        index, card_id = wait_for_next_card(
-                            driver, da_e, da_k, examples, last_index, last_card_id
-                        )
+                # 카드가 스스로 넘어가지 않는 화면이 있다. "다음카드" 버튼을
+                # 기다리는 화면과, 답을 보여주며 SPACE 를 기다리는 화면이다.
+                # 한 번으로 안 넘어가는 경우가 있어 몇 번 더 밀어 본다.
+                for _ in range(3):
+                    if index > 0:
+                        break
+                    if not advance_to_next_card(driver):
+                        break
+                    index, card_id = wait_for_next_card(
+                        driver, da_e, da_k, examples, last_index, last_card_id,
+                        timeout=4,
+                    )
                 # 스펠은 언제나 영어 철자를 입력하는 모드다. 화면에서 읽은
                 # 글자를 그대로 답으로 쓰지 않고 카드 앞면에서 꺼낸다.
                 answer = norm_text(da_e[index]) if index > 0 else ""
@@ -779,6 +829,7 @@ class SpellingLearning:
                     )
                     raise RuntimeError(
                         f"스펠 {completed + 1}번째 카드를 찾지 못했습니다. "
+                        f"누를 수 있던 것: {visible_controls(driver)} "
                         f"현재 화면: {state}"
                     )
                 submit_answer(driver, answer)
