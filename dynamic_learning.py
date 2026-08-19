@@ -399,20 +399,29 @@ def run(payload):
                         num_d=len(group) + 1,
                         word_d=data,
                     )
-                    # 앞 회차에서 틀린 카드가 큐에 남아 있으면 그것만 먼저
-                    # 나오고 끝난다. 그게 비워져야 완료 화면과 "200% 도전"이
-                    # 뜨므로, 여기서 눌러 이번 회차를 이어서 돌린다.
-                    for _ in range(2):
+                    # 앞 회차에서 틀린 카드가 큐에 남아 있으면 이번 회차는
+                    # 그것만 내주고 끝난다. 그 상태에서는 완료 화면도 "도전"
+                    # 버튼도 나오지 않으므로, 페이지를 다시 열어 구간을 처음
+                    # 부터 받는다.
+                    for attempt in range(2):
                         if completed >= len(group):
                             break
-                        if not reach_challenge(driver, round_target):
-                            break
                         print(
-                            f"남은 카드를 비운 뒤 {round_target}% 도전을 눌러 "
-                            f"이어서 진행합니다.",
+                            f"{completed}/{len(group)}에서 카드가 끊겨 "
+                            f"학습 화면을 다시 엽니다({attempt + 1}/2).",
                             flush=True,
                         )
-                        time.sleep(1.2)
+                        driver.get(
+                            f"https://www.classcard.net/{route}/{set_id}"
+                            f"/{section}/{class_id}"
+                        )
+                        WebDriverWait(driver, 20).until(
+                            lambda d: d.find_elements(By.ID, "wrapper-learn")
+                            or d.find_elements(By.CSS_SELECTOR, ".CardItem")
+                        )
+                        if prepare_round(driver, round_target):
+                            completed = len(group)
+                            break
                         completed = handler_class(driver).run(
                             num_d=len(group) + 1,
                             word_d=data,
