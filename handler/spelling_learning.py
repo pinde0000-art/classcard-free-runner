@@ -1092,6 +1092,11 @@ class SpellingLearning:
                         f"  오답: 사이트 정답 {site_answer!r} — "
                         f"다시 나오면 이 철자로 입력합니다."
                     )
+                    # 틀린 카드는 곧바로 같은 자리에서 다시 물어보기도 한다.
+                    # 그때는 카드 번호가 그대로라 "아직 안 넘어갔다"로 보여
+                    # 기다리다 멈춘다. 같은 카드도 받도록 기준을 비운다.
+                    last_index = -1
+                    last_card_id = ""
                 else:
                     accepted.add(index)
             except Exception as error:
