@@ -99,6 +99,40 @@ def click_visible_text(driver, words):
     return bool(driver.execute_script(script, words))
 
 
+def click_next_card(driver):
+    """카드 결과 화면의 "다음 카드" / "나중에 한번 더" 를 누른다."""
+    return driver.execute_script(
+        """
+        const selectors = ['.btn-short-change-next', '.btn-next-card',
+                           '.btnNextCard', "[class*='change-next']"];
+        for (const selector of selectors) {
+          for (const el of document.querySelectorAll(selector)) {
+            const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+            if (style.display !== 'none' && style.visibility !== 'hidden'
+                && rect.width > 0 && rect.height > 0) { el.click(); return true; }
+          }
+        }
+        return false;
+        """
+    )
+
+
+def reach_challenge(driver, round_target):
+    """완료 화면까지 넘긴 뒤 다음 회차 버튼을 누른다.
+
+    회차가 끝난 직후 화면은 마지막 카드의 결과다. 거기서는 "200% 도전" 이
+    아직 없어서, 곧바로 찾으면 매번 실패한다. 몇 번 넘겨 완료 화면을 띄운
+    다음에 누른다.
+    """
+    for _ in range(6):
+        if click_challenge(driver, round_target):
+            return True
+        if not click_next_card(driver):
+            return False
+        time.sleep(0.8)
+    return click_challenge(driver, round_target)
+
+
 def click_challenge(driver, round_target):
     """"200% 도전" 같은 다음 회차 버튼을 누른다."""
     return driver.execute_script(
@@ -371,7 +405,7 @@ def run(payload):
                     for _ in range(2):
                         if completed >= len(group):
                             break
-                        if not click_challenge(driver, round_target):
+                        if not reach_challenge(driver, round_target):
                             break
                         print(
                             f"남은 카드를 비운 뒤 {round_target}% 도전을 눌러 "
