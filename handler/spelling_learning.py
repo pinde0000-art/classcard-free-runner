@@ -579,7 +579,6 @@ if (!input) {
     }
 }
 const blocks = [];
-if (card) blocks.push(card.innerText || card.textContent || '');
 for (const selector of textSelectors) {
     for (const el of document.querySelectorAll(selector)) {
         if (visible(el)) blocks.push(el.innerText || el.textContent || '');
@@ -589,11 +588,24 @@ return {
     cardId: card ? (card.getAttribute('data-idx') || '') : '',
     hasInput: !!input,
     input: input,
+    // 지금 카드의 글자는 따로 담는다. 답을 보여주는 동안에는 방금 푼 카드와
+    // 다음 카드가 함께 화면에 있어서, 전부 뭉뚱그리면 앞 카드가 먼저 걸려
+    // 같은 답을 두 번 넣는다.
+    cardText: card ? (card.innerText || card.textContent || '') : '',
+    // 답을 낸 카드가 SPACE 를 기다리는 상태. 리콜 학습이 쓰는 신호와 같다.
+    waiting: !!document.querySelector('.CardItem.current.deactive'),
     blocks: blocks.filter(Boolean),
 };
 """
 
-EMPTY_STATE = {"cardId": "", "hasInput": False, "input": None, "blocks": []}
+EMPTY_STATE = {
+    "cardId": "",
+    "hasInput": False,
+    "input": None,
+    "cardText": "",
+    "waiting": False,
+    "blocks": [],
+}
 
 
 def read_card_state(driver):
@@ -604,14 +616,25 @@ def read_card_state(driver):
     return state or dict(EMPTY_STATE)
 
 
-def find_prompt_card(blocks, da_e, da_k, examples):
+def find_prompt_card(card_text, blocks, da_e, da_k, examples):
     """화면에 떠 있는 카드가 몇 번인지 찾는다. 정답 자체는 고르지 않는다.
 
     스펠은 언제나 영어 철자를 입력하는 모드다. 예전에는 화면에서 읽어낸
     글자를 그대로 '문제'로 삼고 반대쪽 값을 답으로 넣었는데, 뜻이 화면에
     없고 예문만 보이는 카드에서는 예문 속 영어 단어가 문제로 잡혀 한국어를
     입력해 버렸다. 그래서 카드 번호만 찾고, 정답은 호출부가 da_e 에서 꺼낸다.
+
+    지금 카드의 글자를 먼저 본다. 화면에 여러 카드가 함께 있을 때 앞 카드가
+    먼저 걸려 같은 답을 두 번 넣는 일을 막는다.
     """
+    if card_text:
+        index = match_blocks([card_text], da_e, da_k, examples)
+        if index > 0:
+            return index
+    return match_blocks(blocks, da_e, da_k, examples)
+
+
+def match_blocks(blocks, da_e, da_k, examples):
     lines = []
     joined = ""
     for block in blocks:
@@ -718,10 +741,30 @@ def wait_for_next_card(
     driver, da_e, da_k, examples, previous_index=-1, previous_card_id="", timeout=10
 ):
     end_time = time.time() + timeout
+    waiting_since = None
     while True:
         state = read_card_state(driver)
         card_id = state.get("cardId") or ""
-        index = find_prompt_card(state.get("blocks") or [], da_e, da_k, examples)
+
+        # 답을 낸 카드가 화면에 답을 띄운 채 SPACE 를 기다리고 있으면, 여기서
+        # 아무리 기다려도 다음 카드는 오지 않는다. 곧바로 돌려보내 호출부가
+        # 넘기게 한다. 잠깐의 전환 상태와 섞이지 않게 조금은 지켜본다.
+        if state.get("waiting"):
+            if waiting_since is None:
+                waiting_since = time.time()
+            elif time.time() - waiting_since >= 0.4:
+                return -1, previous_card_id
+            time.sleep(0.08)
+            continue
+        waiting_since = None
+
+        index = find_prompt_card(
+            state.get("cardText") or "",
+            state.get("blocks") or [],
+            da_e,
+            da_k,
+            examples,
+        )
         if index > 0 and state.get("hasInput"):
             # data-idx 가 있으면 그걸로 판단한다. 뜻이 같은 카드가 이어져도
             # 카드가 넘어간 걸 알아채고, 반대로 같은 카드에서 보이는 글자만
