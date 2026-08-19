@@ -827,6 +827,29 @@ def press_space(driver):
         return False
 
 
+COMPLETE_MARKERS = (
+    "구간 학습이 완료",
+    "학습이 완료",
+    "학습 완료",
+    "새로 학습하기",
+    "% Clear",
+)
+
+
+def section_complete(driver):
+    """사이트가 이번 구간을 다 냈는지 본다.
+
+    이어서 학습하면 이미 외운 카드는 다시 나오지 않는다. 71% 에서 시작하면
+    남은 몇 장만 출제되고 끝나는데, 그걸 "카드를 찾지 못했다"고 오류로
+    처리하고 있었다.
+    """
+    try:
+        text = driver.execute_script("return document.body.innerText || '';") or ""
+    except Exception:
+        return False
+    return any(marker in text for marker in COMPLETE_MARKERS)
+
+
 def visible_controls(driver):
     """실패했을 때 화면에 뭘 누를 수 있었는지 남긴다."""
     try:
@@ -1002,7 +1025,7 @@ class SpellingLearning:
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
                 if not answer:
-                    if len(accepted) >= card_count:
+                    if len(accepted) >= card_count or section_complete(driver):
                         break
                     state = driver.execute_script(
                         "return (document.body.innerText || '').slice(-1200);"
@@ -1067,5 +1090,10 @@ class SpellingLearning:
             print(f"오답 {rejected}회 (정답 처리 {completed}/{card_count})")
         print(f"스펠학습 처리 완료: {completed}/{card_count}")
         if completed < card_count:
-            raise RuntimeError(f"스펠학습이 {completed}/{card_count}에서 중단되었습니다.")
+            if section_complete(driver):
+                print("사이트가 이번 구간의 카드를 모두 냈습니다.")
+            else:
+                raise RuntimeError(
+                    f"스펠학습이 {completed}/{card_count}에서 중단되었습니다."
+                )
         return completed
