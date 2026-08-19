@@ -594,6 +594,11 @@ return {
     cardText: card ? (card.innerText || card.textContent || '') : '',
     // 답을 낸 카드가 SPACE 를 기다리는 상태. 리콜 학습이 쓰는 신호와 같다.
     waiting: !!document.querySelector('.CardItem.current.deactive'),
+    // 채점 화면에 뜨는 "정답 xxx (뜻)". 우리가 넣은 값과 다르면 틀린 것이다.
+    answerText: (() => {
+        const done = document.querySelector('.CardItem.current.deactive');
+        return done ? (done.innerText || done.textContent || '') : '';
+    })(),
     blocks: blocks.filter(Boolean),
 };
 """
@@ -604,8 +609,28 @@ EMPTY_STATE = {
     "input": None,
     "cardText": "",
     "waiting": False,
+    "answerText": "",
     "blocks": [],
 }
+
+ANSWER_PATTERN = re.compile(r"정답\s+([^\n(]+)")
+
+
+def shown_answer(text):
+    """채점 화면이 알려주는 정답 철자를 꺼낸다."""
+    match = ANSWER_PATTERN.search(text or "")
+    return norm_text(match.group(1)) if match else ""
+
+
+def wait_for_grade(driver, timeout=3.0):
+    """채점이 끝나 정답이 화면에 뜰 때까지 기다렸다가 그 글자를 돌려준다."""
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        state = read_card_state(driver)
+        if state.get("waiting"):
+            return state.get("answerText") or ""
+        time.sleep(0.05)
+    return ""
 
 
 def read_card_state(driver):
@@ -840,11 +865,20 @@ class SpellingLearning:
             card_count = max(1, num_d - 1)
             return run_sentence_spell(driver, card_count, da_e, da_k)
         time.sleep(0.3)
+        card_count = max(1, num_d - 1)
         last_index = -1
         last_card_id = ""
-        completed = 0
+        accepted = set()
+        # 세트 페이지에서 읽은 철자와 채점 기준이 다를 때가 있다(대소문자 등).
+        # 틀리면 사이트가 정답을 보여주고 그 카드를 다시 낸다. 그때 쓰려고
+        # 알려준 철자를 적어 둔다.
+        corrections = {}
+        rejected = 0
+        # 틀린 카드가 다시 나오므로 카드 수보다 넉넉히 돈다.
+        budget = card_count * 2 + 4
 
-        for _ in range(1, num_d):
+        while len(accepted) < card_count and budget > 0:
+            budget -= 1
             try:
                 index, card_id = wait_for_next_card(
                     driver, da_e, da_k, examples, last_index, last_card_id
@@ -863,26 +897,48 @@ class SpellingLearning:
                     )
                 # 스펠은 언제나 영어 철자를 입력하는 모드다. 화면에서 읽은
                 # 글자를 그대로 답으로 쓰지 않고 카드 앞면에서 꺼낸다.
-                answer = norm_text(da_e[index]) if index > 0 else ""
+                answer = ""
+                if index > 0:
+                    answer = corrections.get(index) or norm_text(da_e[index])
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
                 if not answer:
+                    if len(accepted) >= card_count:
+                        break
                     state = driver.execute_script(
                         "return (document.body.innerText || '').slice(-1200);"
                     )
                     raise RuntimeError(
-                        f"스펠 {completed + 1}번째 카드를 찾지 못했습니다. "
+                        f"스펠 {len(accepted) + 1}번째 카드를 찾지 못했습니다. "
                         f"누를 수 있던 것: {visible_controls(driver)} "
                         f"현재 화면: {state}"
                     )
                 submit_answer(driver, answer)
                 last_index = index
                 last_card_id = card_id
-                completed += 1
+
+                # 채점 결과를 확인한다. 예전에는 넣기만 하고 넘어가서, 전부
+                # 틀려도 완료라고 보고했다. 클래스카드는 맞힌 카드만 진행률에
+                # 반영하므로 그러면 "성공했는데 저장이 안 되는" 상태가 된다.
+                site_answer = shown_answer(wait_for_grade(driver))
+                if site_answer and site_answer != answer:
+                    # 사이트가 알려준 철자가 이 카드의 정답이다. 틀린 카드는
+                    # 다시 나오므로 그때 이 값으로 넣는다.
+                    corrections[index] = site_answer
+                    rejected += 1
+                    print(
+                        f"  오답: 사이트 정답 {site_answer!r} — "
+                        f"다시 나오면 이 철자로 입력합니다."
+                    )
+                else:
+                    accepted.add(index)
             except Exception as error:
                 print(f"스펠 학습 중 오류가 발생했습니다: {error}")
                 raise
-        card_count = max(1, num_d - 1)
+
+        completed = len(accepted)
+        if rejected:
+            print(f"오답 {rejected}회 (정답 처리 {completed}/{card_count})")
         print(f"스펠학습 처리 완료: {completed}/{card_count}")
         if completed < card_count:
             raise RuntimeError(f"스펠학습이 {completed}/{card_count}에서 중단되었습니다.")
