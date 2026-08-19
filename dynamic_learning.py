@@ -105,6 +105,11 @@ def prepare_round(driver, round_target):
         int(value) for value in re.findall(r"(\d+)\s*%\s*Clear", body, re.I)
     ]
     clear_progress = max(clear_values, default=0)
+    print(
+        f"회차 준비: 목표 {round_target}% / 화면 Clear {clear_progress}% / "
+        f"화면 앞부분 {re.sub(r'[ \t]+', ' ', body[:400])!r}",
+        flush=True,
+    )
     if clear_progress >= round_target:
         print(
             f"현재 화면에 {clear_progress}% 완료가 확인되어 "
