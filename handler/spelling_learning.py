@@ -4,6 +4,7 @@ from collections import Counter
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -695,6 +696,10 @@ def advance_to_next_card(driver):
     for selector in (
         "#wrapper-learn .btnNextCard",
         "#wrapper-learn .btn-next-card",
+        # 틀린 카드 뒤에 뜨는 "나중에 한번 더". 클래스가 btn-short-change-next
+        # 라 next-card 만 찾던 선택자에 걸리지 않아 여기서 멈춰 있었다.
+        "#wrapper-learn .btn-short-change-next",
+        "#wrapper-learn [class*='change-next']",
         "#wrapper-learn [class*='next-card']",
     ):
         for element in driver.find_elements(By.CSS_SELECTOR, selector):
@@ -728,6 +733,20 @@ def press_space(driver):
             if (document.activeElement && document.activeElement.blur) {
                 document.activeElement.blur();
             }
+            """
+        )
+    except Exception:
+        pass
+    # 먼저 진짜 키 입력을 보낸다. 스크립트로 만든 KeyboardEvent 는 isTrusted
+    # 가 false 라 무시하는 화면이 있다.
+    try:
+        ActionChains(driver).send_keys(Keys.SPACE).perform()
+        return True
+    except Exception:
+        pass
+    try:
+        driver.execute_script(
+            """
             const target = document.body || document;
             for (const type of ['keydown', 'keypress', 'keyup']) {
                 target.dispatchEvent(new KeyboardEvent(type, {
