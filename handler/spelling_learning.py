@@ -827,22 +827,25 @@ def press_space(driver):
         return False
 
 
+# "100% Clear" 같은 진행률 배지는 회차 내내 화면에 붙어 있다. 그걸 완료로
+# 보면 2회차가 첫 카드도 받기 전에 끝나 버린다. 구간이 실제로 끝났을 때만
+# 뜨는 문구로 좁힌다.
 COMPLETE_MARKERS = (
     "구간 학습이 완료",
-    "학습이 완료",
-    "학습 완료",
     "새로 학습하기",
-    "% Clear",
 )
 
 
 def section_complete(driver):
-    """사이트가 이번 구간을 다 냈는지 본다.
+    """사이트가 이번 구간의 카드를 다 냈는지 본다.
 
     이어서 학습하면 이미 외운 카드는 다시 나오지 않는다. 71% 에서 시작하면
     남은 몇 장만 출제되고 끝나는데, 그걸 "카드를 찾지 못했다"고 오류로
-    처리하고 있었다.
+    처리하고 있었다. 반대로 아직 풀 카드가 남아 있는데 끝났다고 보면 회차가
+    통째로 날아가므로, 입력칸이 없는 것까지 확인한다.
     """
+    if has_spell_input(driver):
+        return False
     try:
         text = driver.execute_script("return document.body.innerText || '';") or ""
     except Exception:
@@ -1025,7 +1028,7 @@ class SpellingLearning:
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
                 if not answer:
-                    if len(accepted) >= card_count or section_complete(driver):
+                    if len(accepted) >= card_count or (accepted and section_complete(driver)):
                         break
                     state = driver.execute_script(
                         "return (document.body.innerText || '').slice(-1200);"
@@ -1090,7 +1093,7 @@ class SpellingLearning:
             print(f"오답 {rejected}회 (정답 처리 {completed}/{card_count})")
         print(f"스펠학습 처리 완료: {completed}/{card_count}")
         if completed < card_count:
-            if section_complete(driver):
+            if completed and section_complete(driver):
                 print("사이트가 이번 구간의 카드를 모두 냈습니다.")
             else:
                 raise RuntimeError(
