@@ -1026,7 +1026,7 @@ class SpellingLearning:
                 # 카드가 스스로 넘어가지 않는 화면이 있다. "다음카드" 버튼을
                 # 기다리는 화면과, 답을 보여주며 SPACE 를 기다리는 화면이다.
                 # 한 번으로 안 넘어가는 경우가 있어 몇 번 더 밀어 본다.
-                for _ in range(3):
+                for _ in range(6):
                     if index > 0:
                         break
                     if not advance_to_next_card(driver):
@@ -1043,13 +1043,23 @@ class SpellingLearning:
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
                 if not answer:
-                    if len(accepted) >= card_count or (accepted and section_complete(driver)):
-                        break
                     state = driver.execute_script(
-                        "return (document.body.innerText || '').slice(-1200);"
+                        "return (document.body.innerText || '').slice(-600);"
                     )
+                    # 구간이 끝났는지를 화면에서 알아내려는 시도는 번번이
+                    # 틀렸다. 1회차를 마쳐도 "Clear!!" 와 완료 문구가 남고,
+                    # 카운터는 세트 전체의 아는 카드 수라 계속 24/24 다.
+                    # 그래서 판단하지 않는다. 넘길 만큼 넘겨도 카드가 더
+                    # 나오지 않으면 그게 끝이다.
+                    if accepted:
+                        print(
+                            f"카드가 더 나오지 않아 이번 구간을 마칩니다 "
+                            f"({len(accepted)}/{card_count}). "
+                            f"화면: {norm_text(state)[:160]}"
+                        )
+                        break
                     raise RuntimeError(
-                        f"스펠 {len(accepted) + 1}번째 카드를 찾지 못했습니다. "
+                        f"스펠 첫 카드를 받지 못했습니다. "
                         f"누를 수 있던 것: {visible_controls(driver)} "
                         f"현재 화면: {state}"
                     )
@@ -1113,12 +1123,8 @@ class SpellingLearning:
             print(f"오답 {rejected}회 (정답 처리 {completed}/{card_count})")
         print(f"스펠학습 처리 완료: {completed}/{card_count}")
         if completed < card_count:
-            if completed and section_complete(driver):
-                _state = read_card_state(driver)
-                print(
-                    "사이트가 이번 구간의 카드를 모두 냈습니다 "
-                    f"(카운터 {_state.get('knownCount')}/{_state.get('totalCount')})"
-                )
+            if completed:
+                print("사이트가 이번 구간의 카드를 다 냈습니다.")
             else:
                 raise RuntimeError(
                     f"스펠학습이 {completed}/{card_count}에서 중단되었습니다."
