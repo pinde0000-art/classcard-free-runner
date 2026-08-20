@@ -1,0 +1,28 @@
+name: 초기화 방법 조사
+
+on:
+  workflow_dispatch:
+    inputs:
+      class_id: {description: "클래스 번호", required: true}
+      set_id: {description: "세트 번호", required: true}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLASSCARD_ID: ${{ secrets.CLASSCARD_ID }}
+      CLASSCARD_PASSWORD: ${{ secrets.CLASSCARD_PASSWORD }}
+      CLASSCARD_NONINTERACTIVE: "1"
+      PROBE_CLASS_ID: ${{ inputs.class_id }}
+      PROBE_SET_ID: ${{ inputs.set_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+      - name: 조사
+        run: python -u probe_reset.py
