@@ -413,37 +413,19 @@ def run(payload):
                         open_set(driver, set_id, class_id)
                 else:
                     set_page_fresh = False
-                    # 2회차부터는 앞 회차가 끝난 화면에서 그대로 이어간다.
-                    # 완료 화면의 "200% 도전" 을 눌러야 사이트가 두 번째
-                    # 100% 로 쳐 준다. 페이지를 새로 열면 같은 구간을 한 번
-                    # 더 도는 것이라 아무리 다 맞혀도 진행률이 안 오른다.
-                    # 회차가 끝나면 사이트가 다음 회차를 알아서 시작해
-                    # 버릴 때가 있다. 그때는 누를 버튼이 없고 문제가 이미
-                    # 떠 있으므로, 페이지를 새로 열면 그 회차를 버리게 된다.
-                    resumed = round_number > 1 and (
-                        reach_challenge(
-                            driver,
-                            round_target_for(
-                                target_progress, current_progress, round_number
-                            ),
-                        )
-                        or (mode_name == "스펠" and has_spell_input(driver))
+                    # 회차마다 학습 화면을 새로 연다. 앞 회차 화면에서 도전
+                    # 버튼으로 이어가는 방식도 해 봤지만, 누른 뒤 문제가 뜨지
+                    # 않고 멈추는 경우가 있었다. 회차를 완료 화면까지 확정한
+                    # 다음 새로 여는 것이, 별도 실행이 늘 제대로 반영되던 것과
+                    # 같은 흐름이다.
+                    driver.get(
+                        f"https://www.classcard.net/{route}/{set_id}"
+                        f"/{section}/{class_id}"
                     )
-                    if resumed:
-                        print(
-                            f"앞 회차 화면에서 {round_number}회차를 이어서 "
-                            f"시작했습니다.",
-                            flush=True,
-                        )
-                    if not resumed:
-                        driver.get(
-                            f"https://www.classcard.net/{route}/{set_id}"
-                            f"/{section}/{class_id}"
-                        )
-                        WebDriverWait(driver, 20).until(
-                            lambda d: d.find_elements(By.ID, "wrapper-learn")
-                            or d.find_elements(By.CSS_SELECTOR, ".CardItem")
-                        )
+                    WebDriverWait(driver, 20).until(
+                        lambda d: d.find_elements(By.ID, "wrapper-learn")
+                        or d.find_elements(By.CSS_SELECTOR, ".CardItem")
+                    )
                 if label == "문장" and section == 4000:
                     body = driver.execute_script("return document.body.innerText || '';")
                     if re.search(r"\b0\s*/\s*0\b", body):
