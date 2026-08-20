@@ -746,6 +746,33 @@ def tokens_align(headword_token, example_token):
     return True, False
 
 
+EXAM_DATA_JS = """
+const el = document.querySelector('.CardItem[data-idx="' + arguments[0] + '"]');
+if (!el) return '';
+for (const node of el.querySelectorAll('.exam-data')) {
+    const text = (node.textContent || '').trim();
+    if (text) return text;
+}
+return '';
+"""
+
+
+def read_exam_data(driver, card_id):
+    """카드가 요구하는 답을 화면에서 그대로 읽는다.
+
+    예문의 빈칸 자리는 .exam-data 로 들어 있다. 표제어에서 꼴을 유추할
+    필요 없이 이게 정답이다. 'be familiar with' 처럼 예문에서 부사가
+    끼어들거나('is very familiar with') 소유격이 바뀌는('on my way to')
+    카드까지 여기서 정확히 나온다. 숨겨진 쪽도 있어 textContent 로 읽는다.
+    """
+    if not card_id:
+        return ""
+    try:
+        return norm_text(driver.execute_script(EXAM_DATA_JS, card_id))
+    except Exception:
+        return ""
+
+
 def example_answer(example, headword):
     """예문 안에서 이 카드가 요구하는 꼴을 찾아 그대로 돌려준다.
 
@@ -1104,29 +1131,16 @@ class SpellingLearning:
                 # 글자를 그대로 답으로 쓰지 않고 카드 앞면에서 꺼낸다.
                 answer = ""
                 if index > 0:
-                    # 사이트가 알려준 철자 > 예문에서 뜬 꼴 > 표제어 순으로
-                    # 쓴다. 예문 쪽을 먼저 보는 덕에 'tool' 대신 'tools' 를
-                    # 처음부터 넣어, 틀렸다가 고치느라 깎이는 점수가 없다.
+                    # 화면의 .exam-data 가 이 카드가 요구하는 답 그 자체다. 그게
+                    # 없을 때만 예문에서 유추하고, 마지막이 표제어다.
                     answer = (
                         corrections.get(card_id or f"i{index}")
+                        or read_exam_data(driver, card_id)
                         or example_answer(examples[index], da_e[index])
                         or norm_text(da_e[index])
                     )
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
-                if len(accepted) == 0 and not corrections:
-                    try:
-                        html = driver.execute_script(
-                            "const el = document.querySelector("
-                            "'.CardItem[data-idx=\"' + arguments[0] + '\"]');"
-                            "return el ? el.innerHTML : '';",
-                            card_id,
-                        )
-                        text = norm_text(html)
-                        for part in range(0, min(len(text), 4800), 1200):
-                            print(f"[진단{part}] {text[part:part + 1200]}", flush=True)
-                    except Exception as error:
-                        print(f"[진단] HTML 읽기 실패: {error}", flush=True)
                 if not answer:
                     state = driver.execute_script(
                         "return (document.body.innerText || '').slice(-600);"
