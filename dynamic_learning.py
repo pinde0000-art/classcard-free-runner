@@ -15,7 +15,7 @@ from batch_learning import create_login_session, login, open_set, read_learning_
 from classcard_catalog import make_driver, read_cards
 from handler.recall_learning import RecallLearning
 from handler.rote_learning import RoteLearning
-from handler.spelling_learning import SpellingLearning
+from handler.spelling_learning import SpellingLearning, press_space
 from handler.test_learning import TestLearning, call_with_watchdog
 from utility import get_account
 
@@ -137,7 +137,8 @@ def reach_challenge(driver, round_target):
             time.sleep(1.2)
             return True
         if not click_next_card(driver):
-            break
+            # 마지막 카드 뒤에는 넘길 버튼이 없고 SPACE 만 받는다.
+            press_space(driver)
         time.sleep(0.7)
     buttons = driver.execute_script(
         """
