@@ -418,6 +418,10 @@ def run(payload):
                     # 않고 멈추는 경우가 있었다. 회차를 완료 화면까지 확정한
                     # 다음 새로 여는 것이, 별도 실행이 늘 제대로 반영되던 것과
                     # 같은 흐름이다.
+                    if round_number > 1:
+                        # 세트 페이지를 한 번 거친다. 학습 화면만 다시 열면
+                        # 세 번째 시도가 두 번째를 되풀이하는 데 그쳤다.
+                        open_set(driver, set_id, class_id)
                     driver.get(
                         f"https://www.classcard.net/{route}/{set_id}"
                         f"/{section}/{class_id}"
