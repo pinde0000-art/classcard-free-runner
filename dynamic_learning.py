@@ -100,6 +100,10 @@ def click_visible_text(driver, words):
 
 
 
+def norm_body(text):
+    return re.sub(r"s+", " ", str(text or "")).strip()
+
+
 def round_target_for(target_progress, current_progress, round_number):
     return min(target_progress, current_progress + round_number * 100)
 
@@ -135,6 +139,23 @@ def reach_challenge(driver, round_target):
         if not click_next_card(driver):
             break
         time.sleep(0.7)
+    buttons = driver.execute_script(
+        """
+        return Array.from(document.querySelectorAll('a, button, .btn'))
+            .filter(el => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+            })
+            .map(el => (el.innerText || '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean).slice(0, 25);
+        """
+    )
+    body = driver.execute_script("return document.body.innerText || '';") or ""
+    print(
+        f"[진단] {round_target}% 도전을 찾지 못했습니다. 버튼 {buttons} / "
+        f"화면 {norm_body(body)[:300]!r}",
+        flush=True,
+    )
     return False
 
 
