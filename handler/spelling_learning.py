@@ -1122,7 +1122,9 @@ class SpellingLearning:
                             "return el ? el.innerHTML : '';",
                             card_id,
                         )
-                        print(f"[진단] 카드 HTML: {norm_text(html)[:1200]}", flush=True)
+                        text = norm_text(html)
+                        for part in range(0, min(len(text), 4800), 1200):
+                            print(f"[진단{part}] {text[part:part + 1200]}", flush=True)
                     except Exception as error:
                         print(f"[진단] HTML 읽기 실패: {error}", flush=True)
                 if not answer:
