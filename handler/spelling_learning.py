@@ -719,6 +719,66 @@ def read_card_state(driver):
     return state or dict(EMPTY_STATE)
 
 
+WORD_PATTERN = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9']+")
+
+
+def word_stem(token):
+    """'make' -> 'mak' 처럼 어미가 붙어도 남는 앞부분."""
+    token = token.casefold().rstrip("e")
+    return token if len(token) >= 3 else ""
+
+
+def tokens_align(headword_token, example_token):
+    """같은 낱말의 다른 꼴인지. (일치 여부, 정확히 같은지)"""
+    if headword_token.casefold() == example_token.casefold():
+        return True, True
+    stem = word_stem(headword_token)
+    if not stem or not example_token.casefold().startswith(stem):
+        return False, False
+    # 'go' 가 'good' 에 걸리는 식의 우연을 막는다.
+    if len(example_token) - len(headword_token) > 4:
+        return False, False
+    return True, False
+
+
+def example_answer(example, headword):
+    """예문 안에서 이 카드가 요구하는 꼴을 찾아 그대로 돌려준다.
+
+    스펠은 표제어가 아니라 예문에서 빈칸이 된 꼴을 받는다. 'tool' 을 넣으면
+    'tools' 라며 틀리고, 'offer' 는 'offered', 'sweat' 는 문장 첫머리라
+    'Sweat' 이다. 그래서 예문에서 해당 부분을 그대로 떠온다.
+
+    찾지 못하면 빈 문자열을 돌려주고, 호출부가 표제어를 그대로 쓴다.
+    """
+    example = norm_text(example)
+    headword = norm_text(headword)
+    if not example or not headword:
+        return ""
+    wanted = WORD_PATTERN.findall(headword)
+    found = list(WORD_PATTERN.finditer(example))
+    if not wanted or len(found) < len(wanted):
+        return ""
+
+    best = None
+    for start in range(len(found) - len(wanted) + 1):
+        matched = exact = 0
+        for offset, token in enumerate(wanted):
+            ok, same = tokens_align(token, found[start + offset].group())
+            if ok:
+                matched += 1
+                exact += int(same)
+        if matched * 2 >= len(wanted) and matched:
+            score = (matched, exact)
+            if best is None or score > best[0]:
+                best = (score, start)
+
+    if best is None:
+        return ""
+    start = best[1]
+    end = found[start + len(wanted) - 1].end()
+    return example[found[start].start():end]
+
+
 def find_prompt_card(card_text, blocks, da_e, da_k, examples):
     """화면에 떠 있는 카드가 몇 번인지 찾는다. 정답 자체는 고르지 않는다.
 
@@ -1039,7 +1099,14 @@ class SpellingLearning:
                 # 글자를 그대로 답으로 쓰지 않고 카드 앞면에서 꺼낸다.
                 answer = ""
                 if index > 0:
-                    answer = corrections.get(index) or norm_text(da_e[index])
+                    # 사이트가 알려준 철자 > 예문에서 뜬 꼴 > 표제어 순으로
+                    # 쓴다. 예문 쪽을 먼저 보는 덕에 'tool' 대신 'tools' 를
+                    # 처음부터 넣어, 틀렸다가 고치느라 깎이는 점수가 없다.
+                    answer = (
+                        corrections.get(index)
+                        or example_answer(examples[index], da_e[index])
+                        or norm_text(da_e[index])
+                    )
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
                 if not answer:
