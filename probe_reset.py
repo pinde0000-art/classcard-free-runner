@@ -57,6 +57,31 @@ def main():
         if not found:
             print("  (없음)", flush=True)
 
+        print("=== 진행률 영역 ===", flush=True)
+        print(driver.execute_script(
+            "const el = document.querySelector('.bottom-fixed');"
+            "return el ? (el.innerText || '').replace(/\s+/g, ' ').trim() : '(없음)';"
+        ), flush=True)
+        summary = driver.execute_script(
+            """
+            const el = document.querySelector('.bottom-fixed .btn-summary, .btn-summary');
+            if (!el) return false;
+            el.click();
+            return true;
+            """
+        )
+        print(f"=== 진행률 상세 열기: {summary} ===", flush=True)
+        if summary:
+            import time as _t
+            _t.sleep(1.5)
+            print(driver.execute_script(
+                "const el = document.querySelector('.modal.in, .modal.show');"
+                "return el ? (el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 800)"
+                " : '(모달 없음)';"
+            ), flush=True)
+            for item in driver.execute_script(LIST_CONTROLS):
+                print(f"  {item}", flush=True)
+
         # 설정/더보기 메뉴를 열면 나오는 항목이 있는지도 본다.
         opened = driver.execute_script(
             """
