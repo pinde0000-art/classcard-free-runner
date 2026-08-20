@@ -1114,6 +1114,17 @@ class SpellingLearning:
                     )
                 question = norm_text(da_k[index]) if index > 0 else ""
                 print(f"문제: {question!r} / 입력: {answer!r}")
+                if len(accepted) == 0 and not corrections:
+                    try:
+                        html = driver.execute_script(
+                            "const el = document.querySelector("
+                            "'.CardItem[data-idx=\"' + arguments[0] + '\"]');"
+                            "return el ? el.innerHTML : '';",
+                            card_id,
+                        )
+                        print(f"[진단] 카드 HTML: {norm_text(html)[:1200]}", flush=True)
+                    except Exception as error:
+                        print(f"[진단] HTML 읽기 실패: {error}", flush=True)
                 if not answer:
                     state = driver.execute_script(
                         "return (document.body.innerText || '').slice(-600);"
