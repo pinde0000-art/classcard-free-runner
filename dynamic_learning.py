@@ -384,6 +384,7 @@ def run(payload):
             data = word_data(group)
             section = 6000 if len(group) == len(cards) else 4000
             for round_number in range(1, remaining_rounds + 1):
+                resumed = False
                 if mode_name == "테스트":
                     # 앞에서 이미 연 세트 페이지가 그대로 살아 있으면 다시 열지
                     # 않는다(테스트 모드는 그 사이 페이지를 바꾸지 않는다).
@@ -428,7 +429,14 @@ def run(payload):
                     target_progress,
                     current_progress + round_number * 100,
                 )
-                already_completed = mode_name != "테스트" and prepare_round(driver, round_target)
+                # 방금 "도전" 을 눌러 새 회차를 연 참이면 준비 단계가 필요
+                # 없다. 화면에 남은 "200% Clear" 를 보고 회차를 통째로
+                # 건너뛰어 버린다.
+                already_completed = (
+                    not resumed
+                    and mode_name != "테스트"
+                    and prepare_round(driver, round_target)
+                )
                 print(
                     f"{label} {mode_name} {round_number}/{remaining_rounds}회 시작 ({len(group)}개)",
                     flush=True,
