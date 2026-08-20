@@ -15,7 +15,7 @@ from batch_learning import create_login_session, login, open_set, read_learning_
 from classcard_catalog import make_driver, read_cards
 from handler.recall_learning import RecallLearning
 from handler.rote_learning import RoteLearning
-from handler.spelling_learning import SpellingLearning, press_space
+from handler.spelling_learning import SpellingLearning, has_spell_input, press_space
 from handler.test_learning import TestLearning, call_with_watchdog
 from utility import get_account
 
@@ -398,10 +398,17 @@ def run(payload):
                     # 완료 화면의 "200% 도전" 을 눌러야 사이트가 두 번째
                     # 100% 로 쳐 준다. 페이지를 새로 열면 같은 구간을 한 번
                     # 더 도는 것이라 아무리 다 맞혀도 진행률이 안 오른다.
-                    resumed = round_number > 1 and reach_challenge(
-                        driver, round_target_for(
-                            target_progress, current_progress, round_number
+                    # 회차가 끝나면 사이트가 다음 회차를 알아서 시작해
+                    # 버릴 때가 있다. 그때는 누를 버튼이 없고 문제가 이미
+                    # 떠 있으므로, 페이지를 새로 열면 그 회차를 버리게 된다.
+                    resumed = round_number > 1 and (
+                        reach_challenge(
+                            driver,
+                            round_target_for(
+                                target_progress, current_progress, round_number
+                            ),
                         )
+                        or (mode_name == "스펠" and has_spell_input(driver))
                     )
                     if resumed:
                         print(
