@@ -182,6 +182,25 @@ def click_challenge(driver, round_target):
     )
 
 
+def walk_to_completion(driver):
+    """회차가 끝난 화면을 완료 화면까지 넘기고, 확정된 %를 돌려준다.
+
+    회차는 마지막 카드의 결과 화면에서 끝난다. 완료 화면까지 가야 사이트가
+    그 회차를 점수로 확정한다.
+    """
+    for _ in range(8):
+        body = driver.execute_script("return document.body.innerText || '';") or ""
+        values = [int(v) for v in re.findall(r"(\d+)\s*%\s*Clear", body, re.I)]
+        if values:
+            return max(values)
+        if not click_next_card(driver):
+            press_space(driver)
+        time.sleep(0.7)
+    body = driver.execute_script("return document.body.innerText || '';") or ""
+    values = [int(v) for v in re.findall(r"(\d+)\s*%\s*Clear", body, re.I)]
+    return max(values, default=0)
+
+
 def prepare_round(driver, round_target):
     body = driver.execute_script("return document.body.innerText || '';")
     clear_values = [
@@ -487,18 +506,14 @@ def run(payload):
                     flush=True,
                 )
                 time.sleep(0.4)
-            # 마지막 회차가 끝난 화면은 아직 마지막 카드의 결과다. 완료
-            # 화면까지 넘겨야 사이트가 그 회차를 점수로 확정한다.
-            if mode_name != "테스트":
-                for _ in range(6):
-                    body = driver.execute_script(
-                        "return document.body.innerText || '';"
-                    ) or ""
-                    if "Clear!!" in body or "학습이 완료되었습니다" in body:
+                # 회차를 완료 화면까지 밀어 점수를 확정하고, 목표에 닿았으면
+                # 남은 회차는 돌지 않는다. 더 돌면 300% 를 골랐는데 400% 가
+                # 되어 버린다.
+                if mode_name != "테스트":
+                    banked = walk_to_completion(driver)
+                    print(f"확정된 진행률: {banked}%", flush=True)
+                    if banked >= target_progress:
                         break
-                    if not click_next_card(driver):
-                        press_space(driver)
-                    time.sleep(0.7)
         print("카드 학습이 완료되었습니다.", flush=True)
         return {
             "status": "completed",
