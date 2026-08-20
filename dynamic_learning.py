@@ -487,6 +487,18 @@ def run(payload):
                     flush=True,
                 )
                 time.sleep(0.4)
+            # 마지막 회차가 끝난 화면은 아직 마지막 카드의 결과다. 완료
+            # 화면까지 넘겨야 사이트가 그 회차를 점수로 확정한다.
+            if mode_name != "테스트":
+                for _ in range(6):
+                    body = driver.execute_script(
+                        "return document.body.innerText || '';"
+                    ) or ""
+                    if "Clear!!" in body or "학습이 완료되었습니다" in body:
+                        break
+                    if not click_next_card(driver):
+                        press_space(driver)
+                    time.sleep(0.7)
         print("카드 학습이 완료되었습니다.", flush=True)
         return {
             "status": "completed",
