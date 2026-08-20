@@ -37,6 +37,11 @@ ENTRY_SELECTORS = [
     ),
 ]
 
+# 사이트가 알려준 철자를 카드별로 남긴다. 한 회차 안에서 학습 화면을 다시
+# 열면 핸들러가 새로 만들어지는데, 그때 같은 실수를 되풀이하지 않으려면
+# 인스턴스 밖에 있어야 한다.
+LEARNED_SPELLINGS = {}
+
 IGNORE_TEXTS = {
     "학습중...",
     "알아요",
@@ -1068,10 +1073,10 @@ class SpellingLearning:
         last_index = -1
         last_card_id = ""
         accepted = set()
-        # 세트 페이지에서 읽은 철자와 채점 기준이 다를 때가 있다(대소문자 등).
-        # 틀리면 사이트가 정답을 보여주고 그 카드를 다시 낸다. 그때 쓰려고
-        # 알려준 철자를 적어 둔다.
-        corrections = {}
+        # 예문에서 뜬 꼴도 틀릴 때가 있다. 그러면 사이트가 정답을 보여주므로
+        # 적어 뒀다가 다시 쓴다. 회차 안에서 학습 화면을 다시 열면 이 객체가
+        # 새로 만들어지므로, 카드 번호로 모듈에 남겨 그때도 이어 쓴다.
+        corrections = LEARNED_SPELLINGS
         rejected = 0
         # 틀린 카드가 다시 나오므로 카드 수보다 넉넉히 돈다.
         budget = card_count * 2 + 4
@@ -1103,7 +1108,7 @@ class SpellingLearning:
                     # 쓴다. 예문 쪽을 먼저 보는 덕에 'tool' 대신 'tools' 를
                     # 처음부터 넣어, 틀렸다가 고치느라 깎이는 점수가 없다.
                     answer = (
-                        corrections.get(index)
+                        corrections.get(card_id or f"i{index}")
                         or example_answer(examples[index], da_e[index])
                         or norm_text(da_e[index])
                     )
@@ -1152,7 +1157,7 @@ class SpellingLearning:
                     dismiss_modal(driver)
                     rejected += 1
                     if fixed:
-                        corrections[index] = fixed
+                        corrections[card_id or f"i{index}"] = fixed
                         print(f"  대소문자 틀림: {fixed!r} 로 다시 넣습니다.")
                     # 카드가 그대로 남아 있으므로 같은 카드를 다시 받는다.
                     last_index = -1
@@ -1163,7 +1168,7 @@ class SpellingLearning:
                 if site_answer and site_answer != answer:
                     # 사이트가 알려준 철자가 이 카드의 정답이다. 틀린 카드는
                     # 다시 나오므로 그때 이 값으로 넣는다.
-                    corrections[index] = site_answer
+                    corrections[card_id or f"i{index}"] = site_answer
                     rejected += 1
                     print(
                         f"  오답: 사이트 정답 {site_answer!r} — "
