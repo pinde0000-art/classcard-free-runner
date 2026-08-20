@@ -100,6 +100,44 @@ def click_visible_text(driver, words):
 
 
 
+def round_target_for(target_progress, current_progress, round_number):
+    return min(target_progress, current_progress + round_number * 100)
+
+
+def click_next_card(driver):
+    """카드 결과 화면의 "다음 카드" / "나중에 한번 더" 를 누른다."""
+    return driver.execute_script(
+        """
+        const selectors = ['.btn-short-change-next', '.btn-next-card',
+                           '.btnNextCard', "[class*='change-next']"];
+        for (const selector of selectors) {
+          for (const el of document.querySelectorAll(selector)) {
+            const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+            if (style.display !== 'none' && style.visibility !== 'hidden'
+                && rect.width > 0 && rect.height > 0) { el.click(); return true; }
+          }
+        }
+        return false;
+        """
+    )
+
+
+def reach_challenge(driver, round_target):
+    """완료 화면까지 넘긴 뒤 다음 회차 버튼을 누른다.
+
+    회차가 끝난 직후 화면은 마지막 카드의 결과다. 거기서는 "200% 도전" 이
+    아직 없으므로 몇 번 넘겨 완료 화면을 띄운 다음에 누른다.
+    """
+    for _ in range(8):
+        if click_challenge(driver, round_target):
+            time.sleep(1.2)
+            return True
+        if not click_next_card(driver):
+            break
+        time.sleep(0.7)
+    return False
+
+
 def click_challenge(driver, round_target):
     """"200% 도전" 같은 다음 회차 버튼을 누른다."""
     return driver.execute_script(
@@ -333,11 +371,30 @@ def run(payload):
                         open_set(driver, set_id, class_id)
                 else:
                     set_page_fresh = False
-                    driver.get(f"https://www.classcard.net/{route}/{set_id}/{section}/{class_id}")
-                    WebDriverWait(driver, 20).until(
-                        lambda d: d.find_elements(By.ID, "wrapper-learn")
-                        or d.find_elements(By.CSS_SELECTOR, ".CardItem")
+                    # 2회차부터는 앞 회차가 끝난 화면에서 그대로 이어간다.
+                    # 완료 화면의 "200% 도전" 을 눌러야 사이트가 두 번째
+                    # 100% 로 쳐 준다. 페이지를 새로 열면 같은 구간을 한 번
+                    # 더 도는 것이라 아무리 다 맞혀도 진행률이 안 오른다.
+                    resumed = round_number > 1 and reach_challenge(
+                        driver, round_target_for(
+                            target_progress, current_progress, round_number
+                        )
                     )
+                    if resumed:
+                        print(
+                            f"앞 회차 화면에서 {round_number}회차를 이어서 "
+                            f"시작했습니다.",
+                            flush=True,
+                        )
+                    if not resumed:
+                        driver.get(
+                            f"https://www.classcard.net/{route}/{set_id}"
+                            f"/{section}/{class_id}"
+                        )
+                        WebDriverWait(driver, 20).until(
+                            lambda d: d.find_elements(By.ID, "wrapper-learn")
+                            or d.find_elements(By.CSS_SELECTOR, ".CardItem")
+                        )
                 if label == "문장" and section == 4000:
                     body = driver.execute_script("return document.body.innerText || '';")
                     if re.search(r"\b0\s*/\s*0\b", body):
