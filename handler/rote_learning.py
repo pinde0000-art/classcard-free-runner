@@ -285,14 +285,53 @@ def normalize_token(value):
     return value.casefold()
 
 
-def sentence_answer(prompt, word_d):
+def sentence_answer(prompt, word_d, choices=()):
+    """화면의 문제에 해당하는 카드의 영어 전체를 돌려준다.
+
+    긴 문장은 "/" 로 잘려 한 조각씩 나온다. 그래서 문제가 카드의 뜻과 똑같지
+    않고 그 일부일 때가 있다("안드레스 로사노"). 완전 일치만 보던 탓에 그런
+    카드에서 멈췄다.
+
+    조각을 품은 카드를 찾고, 후보가 여럿이면 지금 화면에 놓인 조각 단어들을
+    이어진 한 구간으로 담을 수 있는 카드로 좁힌다.
+    """
+    def clean(value):
+        return re.sub(r"\s+", " ", str(value or "")).strip()
+
     da_e, da_k, _ = word_d
-    prompt = re.sub(r"\s+", " ", str(prompt or "")).strip()
-    for english, korean in zip(da_e, da_k):
-        normalized_english = re.sub(r"\s+", " ", str(english or "")).strip()
-        normalized_korean = re.sub(r"\s+", " ", str(korean or "")).strip()
-        if prompt in {normalized_english, normalized_korean}:
-            return normalized_english
+    prompt = clean(prompt)
+    pairs = [
+        (clean(english), clean(korean))
+        for english, korean in zip(da_e, da_k)
+        if clean(english)
+    ]
+
+    for english, korean in pairs:
+        if prompt and prompt in {english, korean}:
+            return english
+
+    holders = [
+        (english, korean)
+        for english, korean in pairs
+        if prompt and (prompt in korean or prompt in english)
+    ]
+
+    usable_choices = [token for token in choices if normalize_token(token)]
+    if usable_choices:
+        pool = holders or pairs
+        fitting = [
+            english
+            for english, _ in pool
+            if sentence_memorize_segment(english, usable_choices)[0]
+        ]
+        if fitting:
+            return fitting[0] if len(fitting) == 1 else max(fitting, key=len)
+
+    if holders:
+        # 조각이 카드에서 차지하는 비중이 큰 쪽을 고른다.
+        return max(
+            holders, key=lambda item: len(prompt) / max(len(item[1]), 1)
+        )[0]
     return ""
 
 
@@ -388,7 +427,8 @@ def run_sentence_memorize(driver, card_count, word_d):
         )
         prompt_element = visible_element(driver, ".para_item.active")
         prompt = prompt_element.text.strip() if prompt_element is not None else ""
-        answer = sentence_answer(prompt, word_d) or answer_before
+        choices = sentence_memorize_signature(driver)
+        answer = sentence_answer(prompt, word_d, choices) or answer_before
         if not answer:
             raise RuntimeError(
                 f"문장 암기 정답을 찾지 못했습니다: 문제={prompt!r}"
