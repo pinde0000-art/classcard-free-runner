@@ -35,6 +35,37 @@ def is_sentence(card):
     return has_sentence_ending or len(words) >= 6
 
 
+def split_groups(selected, cards):
+    """이번에 돌릴 카드를 어떻게 묶을지 정한다.
+
+    단어와 문장을 나눠 따로 돌리는 건 클래스카드의 구분이 아니라 우리 쪽
+    편의였다. 나누면 각 묶음이 "선택 카드" 구간이 되는데, 문장 세트는 그
+    구간을 0개로 돌려주고 실행이 그대로 죽는다("5과문장" 34장이 단어 4 +
+    문장 30 으로 쪼개져 실패했다).
+
+    전체 범위를 골랐으면 나눌 이유가 없다. 클래스카드가 하는 대로 한 번에
+    돌린다. 범위를 좁혀 골랐을 때만 나누되, 문장이 절반 이상이면 짧아서
+    단어로 잘못 걸린 카드까지 문장으로 함께 둔다. 핸들러는 세션마다 단어/
+    문장 모드를 한 번만 정하므로, 묶음이 한 종류로 유지되는 편이 안전하다.
+    """
+    sentences = [card for card in selected if is_sentence(card)]
+    words = [card for card in selected if not is_sentence(card)]
+    label = "문장" if sentences and len(sentences) >= len(words) else "단어"
+
+    if len(selected) == len(cards):
+        if sentences and words:
+            label = "단어+문장"
+        return [(label, selected)]
+
+    if sentences and len(sentences) >= len(words):
+        return [("문장", selected)]
+    return [
+        (label, group)
+        for label, group in (("단어", words), ("문장", sentences))
+        if group
+    ]
+
+
 def word_data(cards):
     english = [0] + [card["front"] for card in cards]
     korean = [0] + [card["back"] for card in cards]
@@ -100,10 +131,6 @@ def click_visible_text(driver, words):
 
 
 
-def norm_body(text):
-    return re.sub(r"s+", " ", str(text or "")).strip()
-
-
 def round_target_for(target_progress, current_progress, round_number):
     return min(target_progress, current_progress + round_number * 100)
 
@@ -124,40 +151,6 @@ def click_next_card(driver):
         return false;
         """
     )
-
-
-def reach_challenge(driver, round_target):
-    """완료 화면까지 넘긴 뒤 다음 회차 버튼을 누른다.
-
-    회차가 끝난 직후 화면은 마지막 카드의 결과다. 거기서는 "200% 도전" 이
-    아직 없으므로 몇 번 넘겨 완료 화면을 띄운 다음에 누른다.
-    """
-    for _ in range(8):
-        if click_challenge(driver, round_target):
-            time.sleep(1.2)
-            return True
-        if not click_next_card(driver):
-            # 마지막 카드 뒤에는 넘길 버튼이 없고 SPACE 만 받는다.
-            press_space(driver)
-        time.sleep(0.7)
-    buttons = driver.execute_script(
-        """
-        return Array.from(document.querySelectorAll('a, button, .btn'))
-            .filter(el => {
-                const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0;
-            })
-            .map(el => (el.innerText || '').replace(/\s+/g, ' ').trim())
-            .filter(Boolean).slice(0, 25);
-        """
-    )
-    body = driver.execute_script("return document.body.innerText || '';") or ""
-    print(
-        f"[진단] {round_target}% 도전을 찾지 못했습니다. 버튼 {buttons} / "
-        f"화면 {norm_body(body)[:300]!r}",
-        flush=True,
-    )
-    return False
 
 
 def click_challenge(driver, round_target):
@@ -355,12 +348,7 @@ def run(payload):
         originals = {card["card_id"] for card in cards if card["favorite"]}
         selected = cards if mode_name == "테스트" else cards[start - 1:end]
         groups = (
-            [("전체", cards)]
-            if mode_name == "테스트"
-            else [
-                ("단어", [card for card in selected if not is_sentence(card)]),
-                ("문장", [card for card in selected if is_sentence(card)]),
-            ]
+            [("전체", cards)] if mode_name == "테스트" else split_groups(selected, cards)
         )
         groups = [(label, group) for label, group in groups if group]
         card_type = "+".join(label for label, _ in groups)
@@ -398,7 +386,9 @@ def run(payload):
 
         for label, group in groups:
             selected_ids = {card["card_id"] for card in group}
-            if mode_name != "테스트":
+            # 전체 구간으로 돌 때는 중요 카드 표시를 쓰지 않는다. 굳이 세트의
+            # 표시를 전부 바꿨다가 되돌릴 이유가 없다.
+            if mode_name != "테스트" and len(group) != len(cards):
                 set_favorites(driver, set_id, cards, selected_ids)
             data = word_data(group)
             section = 6000 if len(group) == len(cards) else 4000
