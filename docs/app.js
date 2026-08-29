@@ -625,15 +625,19 @@ function placeRunFx() {
   const sink = parseFloat(getComputedStyle(RUNNER_PANEL).marginTop) || 0;
   const edge = 22;
   const swing = clamp(screen.width * 0.34, 74, 150);
+  const theme = document.documentElement.dataset.theme || 'dragon';
+  const themedDuo = theme === 'dragon' ? null : DRAGON.querySelector(`.theme-duo.theme-${theme}`);
   RUN_FX.style.setProperty('--tx', `${run.left + run.width / 2 - screen.left}px`);
   RUN_FX.style.setProperty('--ty', `${run.bottom - screen.top - sink + 44}px`);
   for (const [from, orb, dir] of [['.dp-1', '.fx-l', -1], ['.dp-2', '.fx-r', 1]]) {
-    const source = document.querySelector(from);
+    const source = themedDuo || document.querySelector(from);
     const target = RUN_FX.querySelector(orb);
     if (!source || !target) continue;
     const r = source.getBoundingClientRect();
-    const sx = r.left + r.width / 2 - screen.left;
-    const sy = r.top + r.height * 0.42 - screen.top;
+    // 초콜릿·사탕은 두 캐릭터가 한 이미지이므로 이미지의 좌우 캐릭터 중심을
+    // 각각 출발점으로 쓴다. 드래곤은 기존처럼 각 이미지의 중심을 그대로 쓴다.
+    const sx = r.left + r.width * (themedDuo ? (dir < 0 ? 0.34 : 0.66) : 0.5) - screen.left;
+    const sy = r.top + r.height * (themedDuo ? 0.50 : 0.42) - screen.top;
     target.style.setProperty('--sx', `${sx}px`);
     target.style.setProperty('--sy', `${sy}px`);
     target.style.setProperty('--px', `${clamp(sx + dir * swing, edge, screen.width - edge)}px`);
