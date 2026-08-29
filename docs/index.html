@@ -12,6 +12,7 @@
 <div class="ambient" aria-hidden="true">
 <span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span>
 <span class="grid"></span>
+<span class="theme-particles"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
 <span class="glyphs">
 <svg class="g1" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>
 <svg class="g2" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8L12 3z"/></svg>
@@ -47,12 +48,20 @@
 <p class="brand-tag">Classcard Runner</p>
 <p id="account-status" class="status">계정을 불러오는 중입니다.</p>
 </header>
+<fieldset class="theme-picker" aria-label="테마 선택">
+<legend>테마</legend><div class="theme-options">
+<input id="theme-dragon" name="theme" type="radio" value="dragon" checked><label for="theme-dragon"><span class="theme-preview" aria-hidden="true">🐉</span><b>드래곤</b></label>
+<input id="theme-chocolate" name="theme" type="radio" value="chocolate"><label for="theme-chocolate"><span class="theme-preview" aria-hidden="true">🍫</span><b>초콜릿</b></label>
+<input id="theme-candy" name="theme" type="radio" value="candy"><label for="theme-candy"><span class="theme-preview" aria-hidden="true">🍬</span><b>사탕</b></label>
+</div></fieldset>
 <div class="acct-list" id="account-list"></div>
 <button type="button" class="btn ghost" id="account-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>계정 추가</button>
 <button type="button" class="btn primary" id="account-continue" disabled>이 계정으로 계속</button>
 <div class="mascot" aria-hidden="true">
 <span class="mascot-aura"></span>
-<img src="./dragon.png" alt="" width="750" height="760" decoding="async" fetchpriority="low">
+<img class="theme-mascot theme-dragon" src="./dragon.png" alt="" width="750" height="760" decoding="async" fetchpriority="low">
+<img class="theme-mascot theme-chocolate" src="./chocolate-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
+<img class="theme-mascot theme-candy" src="./candy-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
 </div>
 </section>
 
@@ -71,6 +80,8 @@
 <span class="dragon-glow"></span>
 <img class="dp dp-1" src="./dragon-a.png" alt="" width="279" height="300" decoding="async" fetchpriority="low">
 <img class="dp dp-2" src="./dragon-b.png" alt="" width="302" height="300" decoding="async" fetchpriority="low">
+<img class="theme-duo theme-chocolate" src="./chocolate-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
+<img class="theme-duo theme-candy" src="./candy-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
 </div>
 <div class="field">
 <span class="lbl" id="lbl-class">클래스</span>

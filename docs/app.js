@@ -6,7 +6,24 @@ const API_BASE = 'https://classcard-free-runner.pinde0000.workers.dev';
 const API_URL = `${API_BASE}/run`;
 const ACCOUNTS_KEY = 'clj_accounts_v1';
 const LAST_KEY = 'clj_last_account';
+const THEME_KEY = 'clj_theme_v1';
+const THEMES = ['dragon', 'chocolate', 'candy'];
 const catalogKey = (id) => `clj_catalog_${id}`;
+
+function applyTheme(theme, { save = false } = {}) {
+  const next = THEMES.includes(theme) ? theme : 'dragon';
+  document.documentElement.dataset.theme = next;
+  const picker = document.querySelector(`input[name="theme"][value="${next}"]`);
+  if (picker) picker.checked = true;
+  const colors = { dragon: '#070B16', chocolate: '#170c08', candy: '#150b1c' };
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors[next]);
+  if (save) try { localStorage.setItem(THEME_KEY, next); } catch (error) {}
+}
+let savedTheme = 'dragon';
+try { savedTheme = localStorage.getItem(THEME_KEY) || 'dragon'; } catch (error) {}
+applyTheme(savedTheme);
+document.querySelectorAll('input[name="theme"]').forEach((input) =>
+  input.addEventListener('change', () => { if (input.checked) applyTheme(input.value, { save: true }); }));
 
 // 이전 버전의 공용 실행키는 더 이상 휴대폰에 보관하지 않는다.
 try { localStorage.removeItem('classcard_runner_key'); } catch (error) {}
