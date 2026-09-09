@@ -7,7 +7,10 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
+from handler.browser_ops import (
+    LearningWait as WebDriverWait, first_css, first_visible,
+    counter_progress, VISIBLE_JS, click_first_available as click_available,
+)
 
 
 ENTRY_SELECTORS = [
@@ -60,52 +63,23 @@ GLOBAL_KNOWN_SELECTORS = [
 
 
 def click_visible(driver, selectors, timeout=8):
-    end_time = time.time() + timeout
-    while time.time() < end_time:
-        for by, selector in selectors:
-            for element in driver.find_elements(by, selector):
-                try:
-                    if not element.is_displayed() or not element.is_enabled():
-                        continue
-                    driver.execute_script(
-                        "arguments[0].scrollIntoView({block: 'center'});",
-                        element,
-                    )
-                    try:
-                        element.click()
-                    except Exception:
-                        driver.execute_script("arguments[0].click();", element)
-                    return True
-                except Exception:
-                    continue
-        time.sleep(0.2)
-    return False
+    try:
+        click_available(driver, selectors, timeout, native=True)
+        return True
+    except TimeoutException:
+        return False
 
 
 def get_active_card(driver):
-    selectors = [
+    return first_css(driver, [
         ".CardItem.current.showing:not(.deactive)",
         ".CardItem.current:not(.deactive)",
         ".CardItem.showing:not(.deactive):not(.previous):not(.next)",
-    ]
-    for selector in selectors:
-        for element in driver.find_elements(By.CSS_SELECTOR, selector):
-            try:
-                if element.is_displayed() and element.rect["width"] > 0:
-                    return element
-            except Exception:
-                continue
-    return None
+    ])
 
 
 def visible_element(driver, selector):
-    for element in driver.find_elements(By.CSS_SELECTOR, selector):
-        try:
-            if element.is_displayed() and element.is_enabled():
-                return element
-        except Exception:
-            continue
-    return None
+    return first_css(driver, [selector])
 
 
 def sentence_practice_button(driver):
@@ -252,14 +226,7 @@ def get_progress(driver):
 
 
 def known_button_visible(driver):
-    for by, selector in GLOBAL_KNOWN_SELECTORS:
-        for element in driver.find_elements(by, selector):
-            try:
-                if element.is_displayed() and element.is_enabled():
-                    return True
-            except Exception:
-                continue
-    return False
+    return first_visible(driver, GLOBAL_KNOWN_SELECTORS) is not None
 
 
 def start_until_learning(driver, timeout=18):
@@ -362,22 +329,14 @@ def sentence_answer_from_screen(screen_text, word_d):
 
 
 def sentence_progress(driver):
-    known = visible_element(driver, ".known_count")
-    total = visible_element(driver, ".total_count")
-    if known is None or total is None:
-        return None
-    try:
-        return int(known.text.strip()), int(total.text.strip())
-    except (TypeError, ValueError):
-        return None
+    return counter_progress(driver)
 
 
 def sentence_memorize_signature(driver):
-    return tuple(
-        element.text.strip()
-        for element in driver.find_elements(By.CSS_SELECTOR, ".scramble-item")
-        if element.is_displayed()
-    )
+    return tuple(driver.execute_script(VISIBLE_JS + """
+        return [...document.querySelectorAll('.scramble-item')]
+            .filter(visible).map(el => el.innerText.trim());
+    """))
 
 
 def sentence_memorize_segment(answer, choices, expected_start=0):

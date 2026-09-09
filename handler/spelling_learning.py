@@ -6,8 +6,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from handler.browser_ops import (
+    LearningWait as WebDriverWait, first_css, counter_progress,
+    visible_text_groups, click_first_available as click_available,
+)
 
 
 START_BUTTON_SELECTORS = [
@@ -56,17 +58,7 @@ def norm_text(text):
 
 
 def click_first_available(driver, selectors, timeout=12):
-    wait = WebDriverWait(driver, timeout)
-    last_error = None
-    for by, selector in selectors:
-        try:
-            element = wait.until(EC.element_to_be_clickable((by, selector)))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-            driver.execute_script("arguments[0].click();", element)
-            return element
-        except TimeoutException as error:
-            last_error = error
-    raise last_error
+    return click_available(driver, selectors, timeout)
 
 
 def enter_spell(driver, timeout=15):
@@ -136,14 +128,7 @@ CARD_SELECTORS = [
 
 
 def current_card_element(driver):
-    for selector in CARD_SELECTORS:
-        for element in driver.find_elements(By.CSS_SELECTOR, selector):
-            try:
-                if element.is_displayed() and element.rect["width"] > 0:
-                    return element
-            except Exception:
-                continue
-    return None
+    return first_css(driver, CARD_SELECTORS)
 
 
 def current_card_id(driver):
@@ -234,13 +219,7 @@ def has_spell_input(driver):
 
 
 def visible_element(driver, selector):
-    for element in driver.find_elements(By.CSS_SELECTOR, selector):
-        try:
-            if element.is_displayed() and element.is_enabled():
-                return element
-        except Exception:
-            continue
-    return None
+    return first_css(driver, [selector])
 
 
 def sentence_spell_ready(driver):
@@ -255,37 +234,19 @@ def normalize_sentence_token(value):
 
 
 def sentence_spell_progress(driver):
-    known = visible_element(driver, ".known_count")
-    total = visible_element(driver, ".total_count")
-    if known is None or total is None:
-        return None
-    try:
-        return int(known.text.strip()), int(total.text.strip())
-    except (TypeError, ValueError):
-        return None
+    return counter_progress(driver)
 
 
 def sentence_spell_signature(driver):
-    prompt = visible_element(driver, ".CardItem.active .para_item.active")
-    choices = [
-        element.text.strip()
-        for element in driver.find_elements(
-            By.CSS_SELECTOR, ".CardItem.active .scramble-item"
-        )
-        if element.is_displayed()
-    ]
-    return prompt.text.strip() if prompt is not None else "", tuple(choices)
+    prompts, choices = visible_text_groups(driver, [
+        ".CardItem.active .para_item.active", ".CardItem.active .scramble-item",
+    ])
+    return prompts[0] if prompts else "", tuple(choices)
 
 
 def sentence_spell_answer(driver, prompt, da_e, da_k, expected_start=0):
     prompt = norm_text(prompt)
-    choices = [
-        element.text.strip()
-        for element in driver.find_elements(
-            By.CSS_SELECTOR, ".CardItem.active .scramble-item"
-        )
-        if element.is_displayed()
-    ]
+    choices = visible_text_groups(driver, [".CardItem.active .scramble-item"])[0]
     choice_tokens = [
         normalize_sentence_token(token)
         for token in choices
@@ -501,7 +462,13 @@ def start_spell(driver, timeout=35):
         )
         if direct_start is not None:
             driver.execute_script("arguments[0].click();", direct_start)
-            time.sleep(1.2)
+            # Return as soon as the input/tiles exist; retain the old maximum settle time.
+            try:
+                WebDriverWait(driver, 1.2).until(
+                    lambda d: has_spell_input(d) or sentence_spell_ready(d)
+                )
+            except TimeoutException:
+                pass
             continue
         try:
             click_first_available(driver, START_BUTTON_SELECTORS, timeout=1)

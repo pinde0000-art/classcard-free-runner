@@ -1,4 +1,4 @@
-﻿import random
+import random
 import re
 import time
 from collections import Counter
@@ -7,7 +7,10 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from handler.browser_ops import (
+    LearningWait as WebDriverWait, first_css,
+    counter_progress, visible_text_groups, VISIBLE_JS, click_first_available as click_available,
+)
 
 
 START_BUTTON_SELECTORS = [
@@ -73,17 +76,7 @@ def comparable_text(text):
 
 
 def click_first_available(driver, selectors, timeout=12):
-    wait = WebDriverWait(driver, timeout)
-    last_error = None
-    for by, selector in selectors:
-        try:
-            element = wait.until(EC.element_to_be_clickable((by, selector)))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-            driver.execute_script("arguments[0].click();", element)
-            return element
-        except TimeoutException as error:
-            last_error = error
-    raise last_error
+    return click_available(driver, selectors, timeout)
 
 
 def enter_recall(driver, timeout=15):
@@ -188,29 +181,15 @@ def visible_texts(driver, selector):
 
 
 def get_active_card(driver):
-    selectors = [
+    return first_css(driver, [
         ".CardItem.current.showing:not(.deactive)",
         ".CardItem.current:not(.deactive)",
         ".CardItem.showing:not(.deactive):not(.previous):not(.next)",
-    ]
-    for selector in selectors:
-        for element in driver.find_elements(By.CSS_SELECTOR, selector):
-            try:
-                if element.is_displayed() and element.rect["width"] > 0:
-                    return element
-            except Exception:
-                continue
-    return None
+    ])
 
 
 def visible_element(driver, selector):
-    for element in driver.find_elements(By.CSS_SELECTOR, selector):
-        try:
-            if element.is_displayed() and element.is_enabled():
-                return element
-        except Exception:
-            continue
-    return None
+    return first_css(driver, [selector])
 
 
 def sentence_recall_ready(driver):
@@ -224,41 +203,19 @@ def normalize_sentence_token(value):
 
 
 def sentence_recall_progress(driver):
-    known = visible_element(driver, ".known_count")
-    total = visible_element(driver, ".total_count")
-    if known is None or total is None:
-        return None
-    try:
-        return int(known.text.strip()), int(total.text.strip())
-    except (TypeError, ValueError):
-        return None
+    return counter_progress(driver)
 
 
 def sentence_recall_signature(driver):
-    placed = [
-        element.text.strip()
-        for element in driver.find_elements(By.CSS_SELECTOR, SENTENCE_PLACED_SELECTOR)
-        if element.is_displayed()
-    ]
-    choices = [
-        element.text.strip()
-        for element in driver.find_elements(By.CSS_SELECTOR, SENTENCE_CHOICE_SELECTOR)
-        if element.is_displayed()
-    ]
+    placed, choices = visible_text_groups(
+        driver, [SENTENCE_PLACED_SELECTOR, SENTENCE_CHOICE_SELECTOR]
+    )
     return tuple(placed), tuple(choices)
 
 
 def current_sentence_answer(driver, da_e):
-    placed = [
-        element.text.strip()
-        for element in driver.find_elements(By.CSS_SELECTOR, SENTENCE_PLACED_SELECTOR)
-        if element.is_displayed() and element.text.strip() != "?"
-    ]
-    choices = [
-        element.text.strip()
-        for element in driver.find_elements(By.CSS_SELECTOR, SENTENCE_CHOICE_SELECTOR)
-        if element.is_displayed()
-    ]
+    placed, choices = sentence_recall_signature(driver)
+    placed = [text for text in placed if text != "?"]
     placed_normalized = [
         normalize_sentence_token(token)
         for token in placed
@@ -407,40 +364,42 @@ def recall_complete(driver):
 
 
 def get_current_question(driver, da_e, da_k):
-    known_terms = [norm_text(value) for value in [*da_e, *da_k] if norm_text(value) and value != 0]
-    blocks = []
-
-    try:
-        active_card = get_active_card(driver)
-        if active_card is not None:
-            active_text = active_card.text
-            if active_text:
-                blocks.append(active_text)
-    except Exception:
-        pass
-
-    selectors = [
-        ".CardItem.showing .card-top .text-normal",
-        ".CardItem.showing .card-bottom .text-normal",
-        ".CardItem.showing .card-top",
-        ".CardItem.showing .card-bottom",
-        "#wrapper-learn .CardItem .text-normal",
-        "#wrapper-learn .CardItem .card-top",
-        "#wrapper-learn .CardItem .card-bottom",
-        "#wrapper-learn .question",
-    ]
-    for selector in selectors:
-        blocks.extend(visible_texts(driver, selector))
-
+    known_terms = [norm_text(value) for value in [*da_e, *da_k] if value != 0 and norm_text(value)]
+    known_set = set(known_terms)
+    longest_terms = sorted(known_terms, key=len, reverse=True)
+    blocks = driver.execute_script(VISIBLE_JS + """
+        const selectors = [
+            '.CardItem.current.showing:not(.deactive)',
+            '.CardItem.current:not(.deactive)',
+            '.CardItem.showing:not(.deactive):not(.previous):not(.next)',
+        ];
+        let card = null;
+        for (const selector of selectors) {
+            card = [...document.querySelectorAll(selector)].find(visible);
+            if (card) break;
+        }
+        const blocks = card ? [card.innerText] : [];
+        for (const selector of [
+            '.CardItem.showing .card-top .text-normal',
+            '.CardItem.showing .card-bottom .text-normal',
+            '.CardItem.showing .card-top', '.CardItem.showing .card-bottom',
+            '#wrapper-learn .CardItem .text-normal', '#wrapper-learn .CardItem .card-top',
+            '#wrapper-learn .CardItem .card-bottom', '#wrapper-learn .question',
+        ]) {
+            for (const el of document.querySelectorAll(selector)) {
+                if (visible(el)) blocks.push(el.innerText || el.textContent || '');
+            }
+        }
+        return blocks;
+    """)
     for block in blocks:
-        lines = [norm_text(line) for line in block.splitlines() if norm_text(line)]
-        for line in lines:
-            if line in IGNORE_TEXTS:
-                continue
-            if line in known_terms:
+        for line in block.splitlines():
+            line = norm_text(line)
+            if line not in IGNORE_TEXTS and line in known_set:
                 return line
-        for term in sorted(known_terms, key=len, reverse=True):
-            if term and term in norm_text(block):
+        normalized = norm_text(block)
+        for term in longest_terms:
+            if term in normalized:
                 return term
     return ""
 

@@ -323,6 +323,7 @@ def run(payload):
     step = mark("브라우저", step)
     cards = []
     originals = set()
+    favorites_touched = False
     try:
         login(driver, authenticated_session)
         step = mark("로그인", step)
@@ -389,6 +390,8 @@ def run(payload):
             # 전체 구간으로 돌 때는 중요 카드 표시를 쓰지 않는다. 굳이 세트의
             # 표시를 전부 바꿨다가 되돌릴 이유가 없다.
             if mode_name != "테스트" and len(group) != len(cards):
+                # Mark before writing so even a partial network failure is restored.
+                favorites_touched = True
                 set_favorites(driver, set_id, cards, selected_ids)
             data = word_data(group)
             section = 6000 if len(group) == len(cards) else 4000
@@ -510,7 +513,7 @@ def run(payload):
             )
             set_favorites(driver, set_id, cards, originals)
 
-        if cards:
+        if cards and favorites_touched:
             try:
                 call_with_watchdog(restore_favorites, 45)
                 print("기존 중요 카드 표시를 복구했습니다.", flush=True)

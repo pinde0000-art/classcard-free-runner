@@ -13,7 +13,9 @@ from selenium.common.exceptions import (
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
+from handler.browser_ops import (
+    LearningWait as WebDriverWait, VISIBLE_JS, click_first_available as click_available,
+)
 
 
 ENTRY_SELECTORS = [
@@ -88,25 +90,13 @@ def window_is_open(driver):
 
 
 def click_visible(driver, selectors, timeout=8):
-    end_time = time.time() + timeout
-    while time.time() < end_time:
-        if not window_is_open(driver):
-            raise NoSuchWindowException("테스트 중 브라우저 창이 닫혔습니다.")
-        for by, selector in selectors:
-            for element in driver.find_elements(by, selector):
-                try:
-                    if not element.is_displayed() or not element.is_enabled():
-                        continue
-                    driver.execute_script(
-                        "arguments[0].scrollIntoView({block: 'center'});",
-                        element,
-                    )
-                    driver.execute_script("arguments[0].click();", element)
-                    return True
-                except StaleElementReferenceException:
-                    continue
-        time.sleep(0.15)
-    return False
+    if not window_is_open(driver):
+        raise NoSuchWindowException("테스트 중 브라우저 창이 닫혔습니다.")
+    try:
+        click_available(driver, selectors, timeout)
+        return True
+    except TimeoutException:
+        return False
 
 
 def build_records(word_d):
@@ -309,36 +299,24 @@ def answer_candidates(question, records):
 
 
 def visible_question_box(driver):
-    for box in driver.find_elements(By.CSS_SELECTOR, "#testForm .box"):
-        try:
-            if not box.is_displayed():
-                continue
-            if box.find_elements(By.CSS_SELECTOR, "input[type='radio'], input[type='text']"):
-                continue
-            hidden = box.find_elements(By.CSS_SELECTOR, ".front-hidden")
-            raw = (
-                hidden[0].get_attribute("innerHTML")
-                if hidden
-                else box.get_attribute("innerText")
-            )
-            question = clean_question(raw)
-            if question:
-                return box, question
-        except StaleElementReferenceException:
-            continue
+    # Read the element and its text together, before a transition can make it stale.
+    candidates = driver.execute_script(VISIBLE_JS + """
+        return [...document.querySelectorAll('#testForm .box')]
+            .filter(box => visible(box) && !box.querySelector("input[type='radio'], input[type='text']"))
+            .map(box => ({box, raw: box.querySelector('.front-hidden')?.innerHTML ?? box.innerText}));
+    """)
+    for candidate in candidates:
+        question = clean_question(candidate['raw'])
+        if question:
+            return candidate['box'], question
     return None, ""
 
 
 def visible_answer_box(driver):
-    for box in driver.find_elements(By.CSS_SELECTOR, "#testForm .box"):
-        try:
-            if box.is_displayed() and box.find_elements(
-                By.CSS_SELECTOR, "input[type='radio'], input[type='text'], textarea"
-            ):
-                return box
-        except StaleElementReferenceException:
-            continue
-    return None
+    return driver.execute_script(VISIBLE_JS + """
+        return [...document.querySelectorAll('#testForm .box')]
+            .find(box => visible(box) && box.querySelector("input[type='radio'], input[type='text'], textarea")) || null;
+    """)
 
 
 def text_matches(candidate, answers):
@@ -376,81 +354,73 @@ def reveal_choices(driver):
     )
 
 
+def answer_controls(driver):
+    return driver.execute_script(VISIBLE_JS + """
+        const box = [...document.querySelectorAll('#testForm .box')].find(box =>
+            visible(box) && box.querySelector("input[type='radio'], input[type='text'], textarea"));
+        if (!box) return null;
+        const labels = [...box.querySelectorAll('label')].filter(visible);
+        const inputs = [...box.querySelectorAll("input[type='radio']")];
+        const radios = inputs.map(input => {
+            const label = labels.find(el => el.htmlFor === input.id);
+            return label ? {input, label, text: label.innerText} : null;
+        }).filter(Boolean);
+        const typed = [...box.querySelectorAll("input[type='text'], textarea")]
+            .find(el => visible(el) && enabled(el) && !el.readOnly) || null;
+        return {radios, hasRadios: inputs.length > 0, typed, choices: labels.map(el => el.innerText)};
+    """)
+
+
 def choose_answer(driver, answers):
-    # 문항 전환 직후에는 선택지 영역이 잠깐 사라졌다가 다시 그려진다. 예전에는
-    # 2초 안에 정답 라벨을 못 찾으면 곧바로 실패했는데, 그 사이 영역이 비어
-    # 있으면 "선택지 영역을 찾지 못했습니다"로 끝나 버렸다(31862119060).
-    # 영역이 나타날 때까지 먼저 넉넉히 기다린다.
     try:
-        WebDriverWait(driver, 5, poll_frequency=0.05).until(
-            lambda d: visible_answer_box(d) is not None
-        )
+        WebDriverWait(driver, 5, poll_frequency=0.05).until(visible_answer_box)
     except TimeoutException:
         pass
-
-    end_time = time.time() + 4
-    while time.time() < end_time:
-        answer_box = visible_answer_box(driver)
-        if answer_box is None:
+    end_time = time.monotonic() + 4
+    while time.monotonic() < end_time:
+        state = answer_controls(driver)
+        if state is None:
             time.sleep(0.05)
             continue
-
-        inputs = answer_box.find_elements(By.CSS_SELECTOR, "input[type='radio']")
-        for input_element in inputs:
-            input_id = input_element.get_attribute("id")
-            labels = answer_box.find_elements(
-                By.CSS_SELECTOR, f"label[for='{input_id}']"
-            )
-            label = next(
-                (element for element in labels if element.is_displayed()),
-                None,
-            )
-            if label is not None and text_matches(label.text, answers):
-                selected = driver.execute_script(
-                    """
-                    const input = arguments[0];
-                    const label = arguments[1];
-                    if (input.disabled) return false;
+        try:
+            for option in state['radios']:
+                if not text_matches(option['text'], answers):
+                    continue
+                selected = driver.execute_script("""
+                    const input = arguments[0], label = arguments[1];
+                    if (input.matches(':disabled')) return false;
                     label.click();
                     if (!input.checked) input.click();
                     return input.checked;
-                    """,
-                    input_element,
-                    label,
-                )
+                """, option['input'], option['label'])
                 if selected:
-                    return norm_text(label.text)
+                    return norm_text(option['text'])
+            # Typed questions used to wait through the entire four-second radio loop.
+            # Only use this path when the question has no radio options.
+            typed = state['typed']
+            if typed is not None and not state['hasRadios']:
+                typed.click()
+                typed.send_keys(Keys.CONTROL, 'a')
+                typed.send_keys(answers[0])
+                typed.send_keys(Keys.ENTER)
+                return answers[0]
+        except StaleElementReferenceException:
+            pass  # Re-read this question's freshly rendered controls.
         time.sleep(0.03)
-
-    answer_box = visible_answer_box(driver)
-    if answer_box is None:
-        raise RuntimeError("현재 테스트의 선택지 영역을 찾지 못했습니다.")
-
-    typed = answer_box.find_elements(
-        By.CSS_SELECTOR, "input[type='text'], textarea"
-    )
-    typed = next(
-        (
-            element
-            for element in typed
-            if element.is_displayed() and element.is_enabled()
-        ),
-        None,
-    )
-    if typed is not None:
+    # Preserve the previous text-input fallback for a mixed control layout,
+    # after giving radio choices their full readiness/matching deadline.
+    state = answer_controls(driver)
+    if state is not None and state['typed'] is not None:
+        typed = state['typed']
         typed.click()
-        typed.send_keys(Keys.CONTROL, "a")
+        typed.send_keys(Keys.CONTROL, 'a')
         typed.send_keys(answers[0])
         typed.send_keys(Keys.ENTER)
         return answers[0]
-
-    choices = [
-        norm_text(label.text)
-        for label in answer_box.find_elements(By.CSS_SELECTOR, "label")
-        if label.is_displayed() and norm_text(label.text)
-    ]
+    if state is None:
+        raise RuntimeError("현재 테스트의 선택지 영역을 찾지 못했습니다.")
     raise RuntimeError(
-        f"정답 {answers[0]!r}을 선택지에서 찾지 못했습니다. 선택지: {choices}"
+        f"정답 {answers[0]!r}을 선택지에서 찾지 못했습니다. 선택지: {state['choices']}"
     )
 
 
@@ -505,33 +475,27 @@ if (!active) {
 """
 
 
-def scramble_choices(driver):
+def scramble_choice_records(driver):
     return driver.execute_script(
-        _ACTIVE_SCRAMBLE_CONTAINER_JS
-        + """
+        _ACTIVE_SCRAMBLE_CONTAINER_JS + """
         if (!active) return [];
         return [...active.querySelectorAll('a:not(.clicked)')].filter(el => {
-          const r = el.getBoundingClientRect();
-          const s = getComputedStyle(el);
+          const r = el.getBoundingClientRect(), s = getComputedStyle(el);
           return r.width > 0 && r.height > 0 && s.display !== 'none'
             && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.05
             && (el.innerText || '').trim();
-        });
+        }).map(element => ({element, text: element.innerText}));
         """
     )
 
 
+def scramble_choices(driver):
+    return [item['element'] for item in scramble_choice_records(driver)]
+
+
 def scramble_choice_texts(driver):
-    # 사이트가 조각 DOM을 매우 빠르게 다시 그려서, execute_script가 반환한 직후
-    # Python에서 .text를 읽는 사이에 이미 stale이 되는 경우가 있다. 이런 조각은
-    # 건너뛰고, WebDriverWait가 다음 폴링에서 새로 조회하도록 예외를 삼킨다.
-    texts = []
-    for element in scramble_choices(driver):
-        try:
-            texts.append(norm_text(element.text))
-        except StaleElementReferenceException:
-            continue
-    return texts
+    # One snapshot instead of a WebDriver .text request for every tile.
+    return [norm_text(item['text']) for item in scramble_choice_records(driver)]
 
 
 def stable_scramble_choice_texts(driver, timeout=6):
@@ -626,22 +590,15 @@ def dismiss_test_focus_warning(driver):
 
 
 def find_scramble_choice(driver, expected_token):
-    # 한 줄 안에 대소문자만 다른 같은 단어가 함께 나올 수 있다(예: "The pilot
-    # completed the flight safely"의 'The'와 'the'). 소문자로 접어서 비교하면
-    # DOM 순서상 먼저 나오는 엉뚱한 조각을 누르게 되므로, 대소문자까지 맞는
-    # 조각을 우선 고르고 없을 때만 접어서 비교한다.
+    # Preserve exact-case preference when "The" and "the" coexist.
     exact = exact_sentence_token(expected_token)
     normalized = normalize_sentence_token(expected_token)
     fallback = None
-    for element in scramble_choices(driver):
-        try:
-            text = element.text
-            if exact_sentence_token(text) == exact:
-                return element
-            if fallback is None and normalize_sentence_token(text) == normalized:
-                fallback = element
-        except StaleElementReferenceException:
-            continue
+    for item in scramble_choice_records(driver):
+        if exact_sentence_token(item['text']) == exact:
+            return item['element']
+        if fallback is None and normalize_sentence_token(item['text']) == normalized:
+            fallback = item['element']
     return fallback
 
 
@@ -713,7 +670,7 @@ def _find_click_confirm(driver, expected_token, expected_start):
     driver.execute_script(
         "arguments[0].scrollIntoView({block: 'center'});", found["choice"]
     )
-    ActionChains(driver).move_to_element(found["choice"]).click().perform()
+    ActionChains(driver, duration=50).move_to_element(found["choice"]).click().perform()
     try:
         WebDriverWait(driver, 1.5, poll_frequency=0.02).until(
             lambda d: (active_scramble_placed_count(d) or 0) > expected_start
@@ -838,7 +795,7 @@ def solve_sentence_scramble(driver, answer):
                             "arguments[0].scrollIntoView({block: 'center'});",
                             remaining[0],
                         )
-                        ActionChains(driver).move_to_element(
+                        ActionChains(driver, duration=50).move_to_element(
                             remaining[0]
                         ).click().perform()
                     except (StaleElementReferenceException, TimeoutException):
@@ -1007,7 +964,7 @@ def wait_for_next_question(driver, number):
                     driver.execute_script(
                         "arguments[0].scrollIntoView({block: 'center'});", element
                     )
-                    ActionChains(driver).move_to_element(element).click().perform()
+                    ActionChains(driver, duration=50).move_to_element(element).click().perform()
                     time.sleep(0.12)
                     break
             except StaleElementReferenceException:
