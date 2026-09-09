@@ -5,28 +5,15 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="./app.css?v=themes-1">
+<link rel="stylesheet" href="./app.css?v=atelier-1">
 </head><body>
 
-<!-- 배경: 은은한 그라디언트 오브 · 격자 · 학습 모티프 · 미세 노이즈 -->
+<!-- 테마 색을 따라 흐르는 조명과 궤도. 모든 배경 요소는 순수 장식이다. -->
 <div class="ambient" aria-hidden="true">
 <span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span>
-<span class="grid"></span>
-<span class="theme-particles"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-<span class="glyphs">
-<svg class="g1" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>
-<svg class="g2" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8L12 3z"/></svg>
-<svg class="g3" viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg>
-<svg class="g4" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10.5h5M7 14h8"/></svg>
-</span>
+<span class="ambient-orbit orbit-a"></span><span class="ambient-orbit orbit-b"></span>
 <span class="noise"></span>
 </div>
-
-<!-- 브랜드 그라디언트 정의 -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
-<linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0%" stop-color="#8FA9FF"/><stop offset="55%" stop-color="#A79BFF"/><stop offset="100%" stop-color="#C79AF2"/>
-</linearGradient></defs></svg>
 
 <!-- 넓은 화면 전용 글래스 레일. 좁은 화면에서는 실행 화면 상단 툴바가 같은 역할을 한다. -->
 <aside class="rail" aria-label="주요 메뉴">
@@ -43,26 +30,33 @@
 
 <section class="screen" id="screen-accounts">
 <header class="head">
+<div class="brand-lockup">
 <span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg></span>
+<div>
 <h1>CLJ</h1>
 <p class="brand-tag">Classcard Runner</p>
-<p id="account-status" class="status">계정을 불러오는 중입니다.</p>
+</div></div>
+<div class="welcome-copy"><h2>학습을<br>시작할까요?</h2><p>나만의 테마, 나의 학습 공간.</p></div>
+<div class="mascot" aria-hidden="true">
+<span class="mascot-aura"></span><span class="mascot-orbit"></span>
+<img class="theme-mascot theme-dragon" src="./dragon.png" alt="" width="750" height="760" decoding="async">
+<img class="theme-mascot theme-chocolate" src="./chocolate-duo.png" alt="" width="1536" height="1024" decoding="async">
+<img class="theme-mascot theme-candy" src="./candy-duo.png" alt="" width="1536" height="1024" decoding="async">
+</div>
 </header>
 <fieldset class="theme-picker" aria-label="테마 선택">
-<legend>테마</legend><div class="theme-options">
-<input id="theme-dragon" name="theme" type="radio" value="dragon" checked><label for="theme-dragon"><span class="theme-preview" aria-hidden="true">🐉</span><b>드래곤</b></label>
-<input id="theme-chocolate" name="theme" type="radio" value="chocolate"><label for="theme-chocolate"><span class="theme-preview" aria-hidden="true">🍫</span><b>초콜릿</b></label>
-<input id="theme-candy" name="theme" type="radio" value="candy"><label for="theme-candy"><span class="theme-preview" aria-hidden="true">🍬</span><b>사탕</b></label>
+<legend>화면 테마</legend><div class="theme-options">
+<input id="theme-dragon" name="theme" type="radio" value="dragon" checked><label for="theme-dragon" class="theme-card dragon-card"><span class="theme-preview" aria-hidden="true"><img src="./dragon.png" alt="" width="750" height="760" decoding="async"></span><span class="theme-caption"><b>드래곤</b><i class="theme-check" aria-hidden="true"></i></span></label>
+<input id="theme-chocolate" name="theme" type="radio" value="chocolate"><label for="theme-chocolate" class="theme-card chocolate-card"><span class="theme-preview" aria-hidden="true"><img src="./chocolate-duo.png" alt="" width="1536" height="1024" decoding="async"></span><span class="theme-caption"><b>초콜릿</b><i class="theme-check" aria-hidden="true"></i></span></label>
+<input id="theme-candy" name="theme" type="radio" value="candy"><label for="theme-candy" class="theme-card candy-card"><span class="theme-preview" aria-hidden="true"><img src="./candy-duo.png" alt="" width="1536" height="1024" decoding="async"></span><span class="theme-caption"><b>사탕</b><i class="theme-check" aria-hidden="true"></i></span></label>
 </div></fieldset>
+<section class="account-space" aria-labelledby="account-heading">
+<div class="section-heading"><h2 id="account-heading">내 계정</h2><p id="account-status" class="status" role="status">계정을 불러오는 중입니다.</p></div>
 <div class="acct-list" id="account-list"></div>
+<div class="account-actions">
 <button type="button" class="btn ghost" id="account-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>계정 추가</button>
-<button type="button" class="btn primary" id="account-continue" disabled>이 계정으로 계속</button>
-<div class="mascot" aria-hidden="true">
-<span class="mascot-aura"></span>
-<img class="theme-mascot theme-dragon" src="./dragon.png" alt="" width="750" height="760" decoding="async" fetchpriority="low">
-<img class="theme-mascot theme-chocolate" src="./chocolate-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
-<img class="theme-mascot theme-candy" src="./candy-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
-</div>
+<button type="button" class="btn primary" id="account-continue" disabled>이 계정으로 계속<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+</div></section>
 </section>
 
 <section class="screen" id="screen-runner" hidden>
@@ -71,11 +65,10 @@
 <span class="runner-who"><span class="avatar sm" id="runner-avatar"></span><b id="runner-nickname"></b></span>
 <button type="button" class="icon-btn" id="catalog-refresh" aria-label="목록 새로고침"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
 </div>
-<p id="status" class="status"></p>
+<div class="runner-intro"><div><span class="eyebrow">Classcard Runner</span><h2>학습 설정</h2></div><p id="status" class="status" role="status"></p></div>
 
 <section class="panel" id="runner-panel">
-<!-- 패널 위 모서리에 나란히 앉은 두 마리. 자리를 차지하지 않도록 absolute 로 띄운다.
-     장식이라 aria-hidden이며, 학습이 도는 동안에는 비켜 준다. -->
+<!-- 패널 우측 위의 기존 캐릭터. 실행 로직이 참조하는 요소와 상태는 유지한다. -->
 <div class="dragon-perch" id="dragon-perch" data-state="perched" aria-hidden="true">
 <span class="dragon-glow"></span>
 <img class="dp dp-1" src="./dragon-a.png" alt="" width="279" height="300" decoding="async" fetchpriority="low">
@@ -84,25 +77,27 @@
 <img class="theme-duo theme-candy" src="./candy-duo.png" alt="" width="1536" height="1024" decoding="async" fetchpriority="low">
 </div>
 <div class="field">
-<span class="lbl" id="lbl-class">클래스</span>
+<span class="lbl" id="lbl-class"><span class="field-index" aria-hidden="true">01</span>클래스</span>
 <select id="class" class="sr-only" tabindex="-1" aria-hidden="true" disabled></select>
 <button type="button" class="picker" id="class-picker" aria-labelledby="lbl-class class-value" disabled>
 <span class="picker-badge" id="class-badge">–</span>
 <span class="picker-body"><span class="picker-value" id="class-value">클래스</span></span>
 <span class="picker-meta" id="class-meta"></span>
+<svg class="picker-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
 </button>
 </div>
 <div class="field">
-<span class="lbl" id="lbl-set">세트</span>
+<span class="lbl" id="lbl-set"><span class="field-index" aria-hidden="true">02</span>세트</span>
 <select id="set" class="sr-only" tabindex="-1" aria-hidden="true" disabled></select>
 <button type="button" class="picker" id="set-picker" aria-labelledby="lbl-set set-value" disabled>
 <span class="picker-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12.5 12 17l9-4.5"/><path d="M3 17.5 12 22l9-4.5"/></svg></span>
 <span class="picker-body"><span class="picker-value" id="set-value">세트</span></span>
 <span class="picker-meta" id="set-meta"></span>
+<svg class="picker-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
 </button>
 </div>
-<div class="field"><span class="lbl">카드 범위</span><div class="range"><input id="start" type="number" min="1" value="1" inputmode="numeric"><span class="dash">~</span><input id="end" type="number" min="1" value="24" inputmode="numeric"></div></div>
-<div class="field"><span class="lbl">학습 종류</span>
+<div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">03</span>카드 범위</span><div class="range"><label class="range-cell"><span>시작</span><input id="start" type="number" min="1" value="1" inputmode="numeric" aria-label="시작 카드"></label><span class="dash" aria-hidden="true">~</span><label class="range-cell"><span>마지막</span><input id="end" type="number" min="1" value="24" inputmode="numeric" aria-label="마지막 카드"></label></div></div>
+<div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">04</span>학습 종류</span>
 <div class="seg" id="mode-seg" role="radiogroup" aria-label="학습 종류">
 <span class="seg-ind" id="mode-ind" aria-hidden="true"></span>
 <input id="m1" name="mode" type="radio" value="1" checked><label for="m1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>암기</label>
@@ -110,7 +105,7 @@
 <input id="m3" name="mode" type="radio" value="3"><label for="m3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 18 5.5-12h3L19 18"/><path d="M7.5 13.5h9"/></svg>스펠</label>
 <input id="m4" name="mode" type="radio" value="4"><label for="m4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v12A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 17.5 6H16"/><path d="m9 13.5 2 2 4-4"/></svg>테스트</label>
 </div></div>
-<div class="field"><span class="lbl">목표</span>
+<div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">05</span>목표</span>
 <div class="seg plain" id="amount-seg" role="radiogroup" aria-label="목표">
 <span class="seg-ind" id="amount-ind" aria-hidden="true"></span>
 <input id="a1" name="amount" type="radio" value="1" checked><label for="a1">100%</label>
@@ -123,7 +118,7 @@
 
 <section id="progress" class="progress">
 <div class="prow">
-<div class="pmeta"><span class="eyebrow">Progress</span><span id="progress-state" class="chip" data-state="idle">대기 중</span></div>
+<div class="pmeta"><span class="eyebrow">학습 진행</span><span id="progress-state" class="chip" data-state="idle">대기 중</span></div>
 <div class="pnums"><strong id="progress-pct" class="pct"><span>0</span><i>%</i></strong><strong id="progress-count" class="count">0/0</strong></div>
 </div>
 <div class="track"><div id="progress-bar" class="fill"></div><div id="progress-glow" class="glow"></div></div>
