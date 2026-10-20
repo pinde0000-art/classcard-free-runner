@@ -5,7 +5,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="./app.css?v=atelier-1">
+<link rel="stylesheet" href="./app.css?v=multi-fast-1">
 </head><body>
 
 <!-- 테마 색을 따라 흐르는 조명과 궤도. 모든 배경 요소는 순수 장식이다. -->
@@ -97,13 +97,12 @@
 </button>
 </div>
 <div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">03</span>카드 범위</span><div class="range"><label class="range-cell"><span>시작</span><input id="start" type="number" min="1" value="1" inputmode="numeric" aria-label="시작 카드"></label><span class="dash" aria-hidden="true">~</span><label class="range-cell"><span>마지막</span><input id="end" type="number" min="1" value="24" inputmode="numeric" aria-label="마지막 카드"></label></div></div>
-<div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">04</span>학습 종류</span>
-<div class="seg" id="mode-seg" role="radiogroup" aria-label="학습 종류">
-<span class="seg-ind" id="mode-ind" aria-hidden="true"></span>
-<input id="m1" name="mode" type="radio" value="1" checked><label for="m1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>암기</label>
-<input id="m2" name="mode" type="radio" value="2"><label for="m2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M20.5 12A8.5 8.5 0 0 1 6 18"/><path d="M18 3v3.5h-3.5"/><path d="M6 21v-3.5h3.5"/></svg>리콜</label>
-<input id="m3" name="mode" type="radio" value="3"><label for="m3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 18 5.5-12h3L19 18"/><path d="M7.5 13.5h9"/></svg>스펠</label>
-<input id="m4" name="mode" type="radio" value="4"><label for="m4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v12A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 17.5 6H16"/><path d="m9 13.5 2 2 4-4"/></svg>테스트</label>
+<div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">04</span>학습 종류 · 여러 개 선택</span>
+<div class="seg multi" id="mode-seg" role="group" aria-label="학습 종류, 여러 개 선택 가능">
+<input id="m1" name="mode" type="checkbox" value="1" checked><label for="m1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 1 4 16V5.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 0 20 16V5.5z"/></svg>암기</label>
+<input id="m2" name="mode" type="checkbox" value="2"><label for="m2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M20.5 12A8.5 8.5 0 0 1 6 18"/><path d="M18 3v3.5h-3.5"/><path d="M6 21v-3.5h3.5"/></svg>리콜</label>
+<input id="m3" name="mode" type="checkbox" value="3"><label for="m3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 18 5.5-12h3L19 18"/><path d="M7.5 13.5h9"/></svg>스펠</label>
+<input id="m4" name="mode" type="checkbox" value="4"><label for="m4"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v12A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 17.5 6H16"/><path d="m9 13.5 2 2 4-4"/></svg>테스트</label>
 </div></div>
 <div class="field"><span class="lbl"><span class="field-index" aria-hidden="true">05</span>목표</span>
 <div class="seg plain" id="amount-seg" role="radiogroup" aria-label="목표">
@@ -173,5 +172,5 @@
 </div></div>
 </div></div>
 
-<script src="./app.js?v=themes-2"></script>
+<script src="./app.js?v=multi-fast-1"></script>
 </body></html>

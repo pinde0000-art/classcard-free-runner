@@ -353,6 +353,11 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
 .seg input:checked+label{color:var(--accent-ink)}
 .seg input:focus-visible+label{outline:2px solid var(--accent-line);outline-offset:-2px}
 .seg.plain label{flex-direction:row;font-size:14px;font-variant-numeric:tabular-nums}
+.seg.multi{gap:4px}
+.seg.multi label{border:1px solid transparent;transition:color .18s var(--ease),background .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease)}
+.seg.multi input:checked+label{
+  background:linear-gradient(145deg,rgb(var(--accent-rgb) / .20),rgb(var(--accent-rgb) / .075));
+  border-color:var(--accent-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 3px 10px rgba(0,0,0,.2)}
 
 /* ---------- 14. 진행률 ---------- */
 .progress{position:relative;display:none;background:var(--glass);border:1px solid var(--line);
@@ -572,7 +577,7 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
    두 용이 동시에 구슬을 쏘고, 실행 버튼 아래에서 부딪혀 터진 뒤
    그 자리에서 학습중 UI가 떠오른다. 시작·도착 좌표는 JS가 실측해 넣는다. */
 #screen-runner{position:relative}
-.fx{position:absolute;inset:0;z-index:3;pointer-events:none;--orb:17px;--fly:900ms;--burst:600ms}
+.fx{position:absolute;inset:0;z-index:3;pointer-events:none;--orb:17px;--fly:240ms;--burst:300ms}
 
 .fx-orb{position:absolute;left:0;top:0;opacity:0;transform:translateX(var(--sx,0))}
 .fx-orb i{
@@ -633,7 +638,7 @@ input:focus-visible{outline:none;border-color:var(--accent-line);background:var(
 #screen-runner .fx{animation:none}
 #screen-runner #progress{
   animation:none;opacity:0;transform:translateY(12px);
-  transition:opacity .5s var(--ease),transform .5s var(--ease)}
+  transition:opacity .18s var(--ease),transform .18s var(--ease)}
 #screen-runner.fx-done #progress.show{opacity:1;transform:none}
 
 @media (prefers-reduced-motion:reduce){

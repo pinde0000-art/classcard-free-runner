@@ -46,15 +46,12 @@ jobs:
       WORKER_URL: ${{ vars.WORKER_URL }}
       RUNNER_KEY: ${{ secrets.RUNNER_KEY }}
       INPUT_ACCOUNT_ID: ${{ inputs.account_id }}
+      CLASSCARD_FAST: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-      - name: 패키지 설치
-        run: |
-          pip install -r requirements.txt
       - name: 클래스카드 자동화
         env:
           ISSUE_NUMBER: ${{ inputs.issue_number }}

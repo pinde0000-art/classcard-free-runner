@@ -1,7 +1,4 @@
-/* CLJ 실행 UI.
-   기존 실행/폴링 로직(sync, range, showProgress, watchProgress, resetRunner,
-   RUN.onclick)은 그대로 두고, 계정 선택과 계정별 목록만 앞에 붙였다.
-   기기에는 비밀번호를 저장하지 않는다. account_token만 보관한다. */
+/* CLJ 실행 UI. 기기에는 비밀번호를 저장하지 않고 account_token만 보관한다. */
 const API_BASE = 'https://classcard-free-runner.pinde0000.workers.dev';
 const API_URL = `${API_BASE}/run`;
 const ACCOUNTS_KEY = 'clj_accounts_v1';
@@ -363,24 +360,38 @@ document.addEventListener('keydown', (event) => {
   else if (!CONFIRM_SHEET.hidden) hideSheet(CONFIRM_SHEET);
 });
 
-/* ---------------- 기존 실행 로직 (동작 변경 없음) ---------------- */
+/* ---------------- 학습 실행 로직 ---------------- */
 function sync() { S.innerHTML = ''; classes[C.value].sets.forEach((s, i) => S.add(new Option(`${s.name}${s.count ? ` · ${s.count}장` : ''}`, i))); range(); }
-function range() {
+function range({ reset = true } = {}) {
   const n = classes[C.value]?.sets[S.value]?.count || 0;
-  if (n) { START.max = END.max = n; START.value = 1; END.value = n; }
-  else { START.removeAttribute('max'); END.removeAttribute('max'); START.value = 1; END.value = 1; }
   const testMode = $('m4').checked; START.disabled = testMode; END.disabled = testMode;
+  if (n) {
+    START.max = END.max = n;
+    if (reset || testMode) { START.value = 1; END.value = n; }
+  } else if (reset) {
+    START.removeAttribute('max'); END.removeAttribute('max'); START.value = 1; END.value = 1;
+  }
 }
 C.onchange = sync; S.onchange = range;
-document.querySelectorAll('[name=mode]').forEach((input) => input.onchange = () => {
-  range(); if (input.value === '4' && input.checked) STATUS.textContent = '테스트는 클래스카드에 출제된 전체 문제로 실행됩니다.';
+const MODE_INPUTS = [...document.querySelectorAll('[name=mode]')];
+const MODE_NAMES = { 1: '암기', 2: '리콜', 3: '스펠', 4: '테스트' };
+const selectedModes = () => MODE_INPUTS.filter((input) => input.checked).map((input) => +input.value);
+MODE_INPUTS.forEach((input) => input.onchange = () => {
+  if (input.checked && input.value === '4') {
+    MODE_INPUTS.forEach((other) => { if (other !== input) other.checked = false; });
+  } else if (input.checked) {
+    $('m4').checked = false;
+  }
+  if (!MODE_INPUTS.some((item) => item.checked)) input.checked = true;
+  range({ reset: $('m4').checked });
+  if ($('m4').checked) STATUS.textContent = '테스트는 클래스카드에 출제된 전체 문제로 실행됩니다.';
 });
 
 const PROGRESS = $('progress'), PROGRESS_STATE = $('progress-state'), PROGRESS_COUNT = $('progress-count'),
   PROGRESS_BAR = $('progress-bar'), PROGRESS_GLOW = $('progress-glow'),
   PROGRESS_PCT = $('progress-pct').firstElementChild;
 let shownDone = 0, shownTotal = 0, shownState = '';
-const STATE_LABEL = { completed: '모두 완료', failed: '오류 발생', running: '학습 중', preparing: '학습 준비 중' };
+const STATE_LABEL = { completed: '모두 완료', failed: '오류 발생', running: '학습 중', preparing: '학습 준비 중', queued: '실행 대기 중' };
 function replay(element, className, duration) { element.classList.remove(className); void element.offsetWidth; element.classList.add(className); setTimeout(() => element.classList.remove(className), duration); }
 function highlightStep() { replay(PROGRESS_GLOW, 'pulse', 760); replay(PROGRESS_COUNT, 'bump', 700); }
 function renderProgress(done, total, state) {
@@ -407,7 +418,9 @@ function resetRunner() {
   PROGRESS_COUNT.textContent = '0/0'; PROGRESS_PCT.textContent = '0';
   PROGRESS_STATE.textContent = '대기 중'; PROGRESS_STATE.dataset.state = 'idle';
   PROGRESS_BAR.style.transform = 'scaleX(0)';
-  $('m1').checked = true; $('a1').checked = true; range(); syncSegments(false); refreshPickers();
+  MODE_INPUTS.forEach((input) => { input.checked = input.id === 'm1'; });
+  document.querySelectorAll('[name=amount]').forEach((input) => { input.checked = input.id === 'a1'; });
+  range(); syncSegments(false); refreshPickers();
   RUN.disabled = false; RUN_LABEL.textContent = '실행';
   $('account-back').disabled = false; $('catalog-refresh').disabled = false;
   STATUS.textContent = activeAccount ? `${activeAccount.nickname || '계정'} · 클래스 ${classes.length}개` : '';
@@ -416,28 +429,33 @@ function resetRunner() {
 async function watchProgress(id, total, initialIssue = 0) {
   let issue = initialIssue;
   for (let attempts = 0; attempts < 3600; attempts += 1) {
-    await wait(1000);
     try {
       const issuePart = issue ? `&issue=${issue}` : '';
       const response = await fetch(`${API_BASE}/status?id=${id}${issuePart}`, { cache: 'no-store' });
       const data = await response.json();
       if (response.ok) {
         if (data.issue) issue = data.issue;
-        await showProgress(data.progress === '0/0' ? `0/${total}` : data.progress, data.state);
-        if (data.state === 'completed') { STATUS.textContent = '모두 완료되었습니다.'; await wait(4000); resetRunner(); return; }
-        if (data.state === 'failed') { STATUS.textContent = '실행이 중단되어 초기화합니다.'; STATUS.classList.add('error'); await wait(2500); resetRunner(); return; }
+        const reported = String(data.progress || '0/0').split('/').map(Number);
+        const progress = !reported[0] && ['queued', 'preparing'].includes(data.state) ? `0/${total}` : data.progress;
+        await showProgress(progress || `0/${total}`, data.state);
+        if (data.state === 'completed') { STATUS.textContent = '선택한 학습을 모두 완료했습니다.'; await wait(1600); resetRunner(); return; }
+        if (data.state === 'failed') { STATUS.textContent = '실행이 중단되어 초기화합니다.'; STATUS.classList.add('error'); await wait(1800); resetRunner(); return; }
       }
     } catch (error) {}
+    await wait(650);
   }
   STATUS.textContent = '진행 상황 확인 시간이 초과되어 초기화합니다.'; STATUS.classList.add('error');
   await wait(2500); resetRunner();
 }
 RUN.onclick = async () => {
   const s = classes[C.value].sets[S.value];
+  const modes = selectedModes();
+  if (!modes.length) { STATUS.textContent = '학습 종류를 하나 이상 선택해 주세요.'; STATUS.classList.add('error'); return; }
+  const runTitle = `[CLJ-MODES:${modes.join(',')}]${s.name}`;
   const payload = {
-    class_id: classes[C.value].id, set_id: s.id, title: s.name,
+    class_id: classes[C.value].id, set_id: s.id, title: runTitle,
     start: +START.value, end: +END.value, card_count: s.count,
-    mode: +document.querySelector('[name=mode]:checked').value,
+    mode: modes[0],
     amount: +document.querySelector('[name=amount]:checked').value,
     account_id: activeAccount.account_id, account_token: activeAccount.account_token,
   };
@@ -446,8 +464,9 @@ RUN.onclick = async () => {
   }
   RUN.disabled = true; RUN_LABEL.textContent = '실행 중'; isRunning = true;
   $('account-back').disabled = true; $('catalog-refresh').disabled = true;
-  STATUS.textContent = '학습을 빠르게 준비하고 있습니다.'; STATUS.classList.remove('error');
-  const selectedTotal = payload.end - payload.start + 1;
+  const modeLabel = modes.map((mode) => MODE_NAMES[mode]).join(' · ');
+  STATUS.textContent = `${modeLabel} 학습을 바로 준비하고 있습니다.`; STATUS.classList.remove('error');
+  const selectedTotal = (payload.end - payload.start + 1) * modes.length;
   await showProgress(`0/${selectedTotal}`, 'preparing');
   try {
     const response = await fetch(API_URL, {
@@ -457,7 +476,7 @@ RUN.onclick = async () => {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     activeAccount.last_used_at = Date.now(); writeAccounts();
-    STATUS.textContent = data.message || '학습을 시작했습니다.';
+    STATUS.textContent = modes.length > 1 ? `${modeLabel} 학습을 함께 시작했습니다.` : (data.message || '학습을 시작했습니다.');
     await showProgress(`0/${selectedTotal}`, 'preparing');
     watchProgress(data.id, selectedTotal, data.issue || 0);
   } catch (error) {
@@ -468,14 +487,14 @@ RUN.onclick = async () => {
 };
 
 /* ---------------- 세그먼트 · 트리거 ---------------- */
-const MODE_IND = $('mode-ind'), AMOUNT_IND = $('amount-ind');
+const AMOUNT_IND = $('amount-ind');
 function slide(indicator, index, flash) { indicator.style.transform = `translateX(${index * 100}%)`; if (flash) replay(indicator, 'flash', 660); }
 function syncSegments(flash) {
-  const modes = [...document.querySelectorAll('[name=mode]')], amounts = [...document.querySelectorAll('[name=amount]')];
-  const m = modes.findIndex((i) => i.checked), a = amounts.findIndex((i) => i.checked);
-  if (m >= 0) slide(MODE_IND, m, flash); if (a >= 0) slide(AMOUNT_IND, a, flash);
+  const amounts = [...document.querySelectorAll('[name=amount]')];
+  const a = amounts.findIndex((input) => input.checked);
+  if (a >= 0) slide(AMOUNT_IND, a, flash);
 }
-document.querySelectorAll('[name=mode],[name=amount]').forEach((input) => input.addEventListener('change', () => syncSegments(true)));
+document.querySelectorAll('[name=amount]').forEach((input) => input.addEventListener('change', () => syncSegments(true)));
 
 const CLASS_PICKER = $('class-picker'), SET_PICKER = $('set-picker'), RUNNER_PANEL = $('runner-panel');
 function refreshPickers() {
@@ -610,8 +629,8 @@ $('account-continue').addEventListener('click', async () => {
    실행 순간: 두 용이 동시에 구슬을 쏘고 → 실행 버튼 아래에서 부딪혀 터지고
    → 그 자리에서 학습중 UI가 떠오른다. */
 const DRAGON = $('dragon-perch'), RUN_FX = $('run-fx'), RUN_SCREEN = $('screen-runner');
-const BURST_MS = 600;
-const flyMs = () => parseFloat(getComputedStyle(RUN_FX).getPropertyValue('--fly')) || 900;
+const BURST_MS = 300;
+const flyMs = () => parseFloat(getComputedStyle(RUN_FX).getPropertyValue('--fly')) || 240;
 let flyTimer = 0, burstTimer = 0, launching = false;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
